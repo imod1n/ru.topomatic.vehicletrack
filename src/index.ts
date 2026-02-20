@@ -1,103 +1,241 @@
-﻿import { VehicleTrackCalculator, VEHICLE_PRESETS, parseIfcAlignment } from './calculator';
-import type { VehicleParams, CorridorResult, Alignment, PluginOptions } from './types';
-import VehicleTrackPanel from './ui/VehicleTrackPanel.vue';
+import { VEHICLE_PRESETS, VehicleTrackCalculator, parseIfcAlignment } from './calculator';
+import type { VehicleParams, VehiclePreset } from './types';
 
-interface PluginManager {
-  commands: {
-    register(id: string, handler: (...args: any[]) => Promise<void>): void;
-    execute(id: string, ...args: any[]): Promise<any>;
-  };
-  viewport: {
-    addPolyline(pts: any[], opts: any): string;
-    addPolygon(pts: any[], opts: any): string;
-    removeObject(id: string): void;
-    refresh(): void;
-    getSelection(): any[];
-  };
-  ui: {
-    showPanel(id: string, component: any, opts?: any): void;
-    hidePanel(id: string): void;
-    showNotification(msg: string, type?: 'info' | 'success' | 'warning' | 'error'): void;
-  };
-  on(event: string, handler: (...args: any[]) => void): void;
-  off(event: string, handler: (...args: any[]) => void): void;
+// ─── Вспомогательные типы (на основе реального API Albatros) ─────────────────
+
+declare interface VehicleTrackRule {
+  vehiclePreset: VehiclePreset;
+  customWheelbase: number;
+  customTrackWidth: number;
+  customOverhangFront: number;
+  customOverhangRear: number;
+  customTurningRadius: number;
+  showOuter: boolean;
+  showInner: boolean;
 }
 
-export class VehicleTrackPlugin {
-  static pluginId = 'ru.topomatic.vehicletrack';
-  private viewportObjects: string[] = [];
-  private pm!: PluginManager;
+// ─── Экспорт плагина (реальный паттерн Albatros) ─────────────────────────────
 
-  async run(pm: PluginManager): Promise<void> {
-    this.pm = pm;
-    console.log(`[VehicleTrack] Плагин запущен (${VehicleTrackPlugin.pluginId})`);
-    pm.commands.register('vehicletrack.calculate', this.handleCalculate.bind(this));
-    pm.commands.register('vehicletrack.clear', this.handleClear.bind(this));
-    pm.commands.register('vehicletrack.open', this.handleOpen.bind(this));
-    await this.handleOpen();
-  }
+export default {
 
-  private async handleOpen(): Promise<void> {
-    try {
-      this.pm.ui.showPanel('vehicletrack.panel', VehicleTrackPanel, {
-        title: 'Коридор движения ТС',
-        width: 340,
-        resizable: false,
-        props: { pluginManager: this.pm },
-      });
-    } catch (err) {
-      console.warn('[VehicleTrack] Ошибка открытия панели', err);
-      this.pm.ui.showNotification('VehicleTrack: выберите трассу в модели', 'info');
-    }
-  }
+  /**
+   * Главная команда — расчёт коридора движения ТС
+   * Вызывается из манифеста как команда плагина
+   */
+  'vehicletrack:calculate'(ctx: Context): DiagnosticRule<VehicleTrackRule> {
+    return {
 
-  private async handleCalculate(args: { vehicle: VehicleParams; options: PluginOptions }): Promise<void> {
-    const selection = this.pm.viewport.getSelection();
-    const ifcAlignment = selection.find(
-      (o: any) => o?.type === 'IfcAlignment' || o?.type === 'IfcPolyline',
-    );
-    if (!ifcAlignment) {
-      this.pm.ui.showNotification('Выберите трассу (IfcAlignment) в модели', 'warning');
-      return;
-    }
-    const alignment: Alignment = parseIfcAlignment(ifcAlignment);
-    const calculator = new VehicleTrackCalculator(args.vehicle);
-    const result: CorridorResult = calculator.calculateCorridor(alignment);
-    this.clearViewportObjects();
-    await this.renderCorridor(result, args.options);
-    this.pm.ui.showNotification(`Коридор построен. Ширина: ${result.straightWidth.toFixed(2)} м`, 'success');
-  }
+      // Параметры по умолчанию при создании правила
+      async createRule() {
+        return {
+          vehiclePreset: 'truck_16m' as VehiclePreset,
+          customWheelbase: 5.5,
+          customTrackWidth: 2.5,
+          customOverhangFront: 1.2,
+          customOverhangRear: 1.5,
+          customTurningRadius: 9.0,
+          showOuter: true,
+          showInner: true,
+        };
+      },
 
-  private async handleClear(): Promise<void> {
-    this.clearViewportObjects();
-    this.pm.ui.showNotification('Коридор удалён', 'info');
-  }
+      // Основная логика расчёта
+      async execute(app, rule, diagnostics, _progress) {
+        const drawing = app.model as any;
+        if (!drawing) {
+          diagnostics.set('error', [{
+            message: ctx.tr('Модель не загружена'),
+            severity: 2, // Warning
+          }]);
+          return;
+        }
 
-  private async renderCorridor(result: CorridorResult, options: PluginOptions): Promise<void> {
-    const color = options.corridorColor ?? '#FF6600';
-    if (options.showOuterContour) {
-      const id = this.pm.viewport.addPolyline(result.outerPolyline, { color, lineWidth: 2, label: 'Внешний контур коридора' });
-      this.viewportObjects.push(id);
-    }
-    if (options.showInnerContour) {
-      const id = this.pm.viewport.addPolyline(result.innerPolyline, { color, lineWidth: 2, lineDash: [4, 4], label: 'Внутренний контур коридора' });
-      this.viewportObjects.push(id);
-    }
-    const polygonPts = [...result.outerPolyline, ...result.innerPolyline.slice().reverse()];
-    const fillId = this.pm.viewport.addPolygon(polygonPts, { fillColor: color, fillOpacity: 0.2, strokeColor: 'transparent', label: 'Коридор движения ТС' });
-    this.viewportObjects.push(fillId);
-    this.pm.viewport.refresh();
-  }
+        // Определяем параметры ТС
+        let vehicle: VehicleParams;
+        if (rule.vehiclePreset === 'custom') {
+          vehicle = {
+            name: ctx.tr('Пользовательское ТС'),
+            wheelbase: rule.customWheelbase,
+            trackWidth: rule.customTrackWidth,
+            overhangFront: rule.customOverhangFront,
+            overhangRear: rule.customOverhangRear,
+            minTurningRadius: rule.customTurningRadius,
+            totalLength: rule.customWheelbase + rule.customOverhangFront + rule.customOverhangRear,
+          };
+        } else {
+          vehicle = VEHICLE_PRESETS[rule.vehiclePreset];
+        }
 
-  private clearViewportObjects(): void {
-    for (const id of this.viewportObjects) {
-      try { this.pm.viewport.removeObject(id); } catch {}
-    }
-    this.viewportObjects = [];
-    this.pm.viewport.refresh();
-  }
-}
+        // Ищем трассы (IfcAlignment) в модели
+        const alignments: any[] = [];
+        drawing.layouts?.model?.walk?.((e: any) => {
+          if (e?.type === 'IfcAlignment' || e?.ifcType === 'IFCALIGNMENT') {
+            alignments.push(e);
+          }
+          return false;
+        });
 
-export default VehicleTrackPlugin;
-export { VehicleTrackCalculator, VEHICLE_PRESETS, parseIfcAlignment };
-export type { VehicleParams, CorridorResult, Alignment, PluginOptions };
+        if (alignments.length === 0) {
+          diagnostics.set('no-alignment', [{
+            message: ctx.tr('Трассы (IfcAlignment) не найдены в модели'),
+            severity: 1, // Warning
+          }]);
+          return;
+        }
+
+        // Если несколько трасс — предлагаем выбор
+        let selectedAlignment = alignments[0];
+        if (alignments.length > 1) {
+          const items = alignments.map((a, i) => ({
+            key: String(i),
+            label: a.Name ?? a.GlobalId ?? `Трасса ${i + 1}`,
+            description: `Длина: ${(a.TotalLength ?? 0).toFixed(1)} м`,
+          }));
+          const picked = await ctx.showQuickPick(items, {
+            placeHolder: ctx.tr('Выберите трассу для расчёта коридора'),
+          });
+          selectedAlignment = alignments[parseInt(picked.key)];
+        }
+
+        // Парсим и рассчитываем коридор
+        const alignment = parseIfcAlignment(selectedAlignment);
+        const calculator = new VehicleTrackCalculator(vehicle);
+        const result = calculator.calculateCorridor(alignment);
+
+        // Отображаем результат в модели
+        if (rule.showOuter && result.outerPolyline.length > 0) {
+          ctx.manager.eval('ru.topomatic.vehicletrack/draw:polyline', {
+            points: result.outerPolyline,
+            color: '#FF6600',
+            lineWidth: 2,
+            label: ctx.tr('Внешний контур коридора'),
+          });
+        }
+
+        if (rule.showInner && result.innerPolyline.length > 0) {
+          ctx.manager.eval('ru.topomatic.vehicletrack/draw:polyline', {
+            points: result.innerPolyline,
+            color: '#FF6600',
+            lineWidth: 2,
+            dashed: true,
+            label: ctx.tr('Внутренний контур коридора'),
+          });
+        }
+
+        // Выводим итог в диагностику
+        diagnostics.set('result', [{
+          message: ctx.tr(
+            'Коридор построен. ТС: {0}. Ширина: {1} м. Внешний R: {2} м. Внутренний R: {3} м.',
+            vehicle.name,
+            result.straightWidth.toFixed(2),
+            result.outerRadius.toFixed(2),
+            result.innerRadius.toFixed(2),
+          ),
+          severity: 0, // Info
+        }]);
+      },
+    };
+  },
+
+  // ─── Провайдер свойств: выбор типа ТС ──────────────────────────────────────
+
+  'property:vehiclePreset'(e: Context & ManifestPropertyProvider): ObjectPropertyProvider {
+    return {
+      getProperties(objects: VehicleTrackRule[]) {
+        return [{
+          id: 'vehicletrack-preset',
+          label: e.label ?? e.tr('Тип транспортного средства'),
+          description: e.description,
+          group: e.group,
+          value() {
+            const val = objects[0]?.vehiclePreset;
+            const preset = val !== 'custom' ? VEHICLE_PRESETS[val as Exclude<VehiclePreset, 'custom'>] : null;
+            return { label: preset?.name ?? e.tr('Пользовательский') };
+          },
+          editor() {
+            return {
+              type: 'editbox' as const,
+              buttons: [{ label: '...', icon: 'directions_car' }],
+              async onDidTriggerItemButton() {
+                const items = [
+                  { key: 'passenger_car',   label: 'Легковой автомобиль',      description: 'L=4.5м, R=5.5м' },
+                  { key: 'truck_16m',       label: 'Грузовик 16 м',            description: 'L=16м, R=9.0м' },
+                  { key: 'truck_20m',       label: 'Грузовик 20 м',            description: 'L=20м, R=12.0м' },
+                  { key: 'bus_12m',         label: 'Автобус 12 м',             description: 'L=12м, R=10.5м' },
+                  { key: 'bus_articulated', label: 'Автобус сочленённый 18 м', description: 'L=18м, R=11.5м' },
+                  { key: 'custom',          label: 'Пользовательский...',       description: 'Задать параметры вручную' },
+                ];
+                const picked = await e.showQuickPick(items, {
+                  placeHolder: e.tr('Выберите тип транспортного средства'),
+                });
+                for (const obj of objects) {
+                  try {
+                    obj.vehiclePreset = picked.key as VehiclePreset;
+                    // Автозаполняем поля из пресета
+                    if (picked.key !== 'custom') {
+                      const p = VEHICLE_PRESETS[picked.key as Exclude<VehiclePreset, 'custom'>];
+                      obj.customWheelbase       = p.wheelbase;
+                      obj.customTrackWidth      = p.trackWidth;
+                      obj.customOverhangFront   = p.overhangFront;
+                      obj.customOverhangRear    = p.overhangRear;
+                      obj.customTurningRadius   = p.minTurningRadius;
+                    }
+                  } catch (err) {
+                    console.error(err);
+                  }
+                }
+              },
+              commit(value) {
+                // Ручной ввод не используется — только через кнопку
+              },
+            };
+          },
+        }];
+      },
+    };
+  },
+
+  // ─── Провайдер свойств: числовые параметры ТС ──────────────────────────────
+
+  'property:numericParam'(e: Context & ManifestPropertyProvider): ObjectPropertyProvider {
+    return {
+      getProperties(objects: VehicleTrackRule[]) {
+        const field = e.field as keyof VehicleTrackRule;
+        if (!field) return [];
+        return [{
+          id: `vehicletrack-${field}`,
+          label: e.label ?? String(field),
+          description: e.description,
+          group: e.group,
+          value() {
+            const val = objects[0]?.[field];
+            for (let i = 1; i < objects.length; i++) {
+              if (objects[i][field] !== val) {
+                return { label: e.tr('**Различные**'), suffix: 'м' };
+              }
+            }
+            return { label: String(val), suffix: 'м' };
+          },
+          editor() {
+            return {
+              type: 'editbox' as const,
+              commit(value) {
+                if (!value) return;
+                const num = parseFloat(value);
+                if (!isFinite(num)) return;
+                for (const obj of objects) {
+                  try { (obj as any)[field] = num; } catch (err) { console.error(err); }
+                }
+              },
+              validate(value) {
+                if (!value) return e.tr('Поле не может быть пустым');
+                if (!isFinite(parseFloat(value))) return e.tr('Введите число');
+                if (parseFloat(value) <= 0) return e.tr('Значение должно быть больше 0');
+              },
+            };
+          },
+        }];
+      },
+    };
+  },
+};
