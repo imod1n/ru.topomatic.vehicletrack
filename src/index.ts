@@ -12,7 +12,7 @@ declare interface VehicleTrackRule {
 
 export default {
 
-    'vehicletrack:calculate'(ctx: Context): DiagnosticRule<VehicleTrackRule> {
+    'vehicletrack'(ctx: Context): DiagnosticRule<VehicleTrackRule> {
         return {
 
             async createRule() {

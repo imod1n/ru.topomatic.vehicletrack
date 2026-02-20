@@ -25,7 +25,7 @@
             "vehicletrack": {
                 "app": "wdx",
                 "title": "Коридор движения ТС",
-                "cmd": "vehicletrack:calculate",
+                "cmd": "vehicletrack",
                 "description": "Расчёт траектории и коридора движения транспортного средства по трассе"
             }
         },
