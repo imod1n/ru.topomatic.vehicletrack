@@ -1,0 +1,55 @@
+
+.vehicle-track-panel[data-v-b8cafffa] {
+  padding: 12px;
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  color: #333;
+  max-width: 320px;
+}
+.panel-title[data-v-b8cafffa] { margin: 0 0 12px; font-size: 15px; font-weight: 600;
+}
+.form-group[data-v-b8cafffa] { margin-bottom: 10px;
+}
+.form-group label[data-v-b8cafffa] { display: block; margin-bottom: 4px; font-weight: 500;
+}
+.form-group select[data-v-b8cafffa],
+.form-group input[type="color"][data-v-b8cafffa] { width: 100%; padding: 4px; border-radius: 4px; border: 1px solid #ccc;
+}
+.vehicle-params[data-v-b8cafffa] { background: #f5f5f5; border-radius: 6px; padding: 8px; margin-bottom: 10px;
+}
+.vehicle-params.editable[data-v-b8cafffa] { background: #fff8e1; border: 1px solid #ffc107;
+}
+.param-row[data-v-b8cafffa] { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;
+}
+.param-row input[data-v-b8cafffa] { width: 80px; padding: 2px 6px; border: 1px solid #ccc; border-radius: 4px; text-align: right;
+}
+.param-row input[data-v-b8cafffa]:disabled { background: #eee; color: #666;
+}
+.checkbox-label[data-v-b8cafffa] { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; cursor: pointer;
+}
+.alignment-info[data-v-b8cafffa] { background: #e8f4fd; border: 1px solid #90caf9; border-radius: 4px; padding: 8px; margin-bottom: 10px; font-size: 12px;
+}
+.alignment-info.warning[data-v-b8cafffa] { background: #fff3e0; border-color: #ffb74d;
+}
+.calc-results[data-v-b8cafffa] { background: #f0f4f0; border-radius: 6px; padding: 8px; margin-bottom: 10px;
+}
+.result-row[data-v-b8cafffa] { display: flex; justify-content: space-between; margin-bottom: 2px;
+}
+.actions[data-v-b8cafffa] { display: flex; gap: 8px;
+}
+.btn-primary[data-v-b8cafffa] { flex: 1; padding: 8px; background: #1565c0; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;
+}
+.btn-primary[data-v-b8cafffa]:disabled { background: #90a4ae; cursor: not-allowed;
+}
+.btn-secondary[data-v-b8cafffa] { padding: 8px 12px; background: #e0e0e0; border: none; border-radius: 6px; cursor: pointer;
+}
+.btn-secondary[data-v-b8cafffa]:disabled { opacity: 0.5; cursor: not-allowed;
+}
+.status[data-v-b8cafffa] { margin-top: 8px; padding: 6px; border-radius: 4px; font-size: 12px;
+}
+.status.success[data-v-b8cafffa] { background: #e8f5e9; color: #2e7d32;
+}
+.status.error[data-v-b8cafffa] { background: #ffebee; color: #c62828;
+}
+.status.info[data-v-b8cafffa] { background: #e3f2fd; color: #1565c0;
+}
