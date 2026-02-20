@@ -185,7 +185,7 @@ function w(r) {
   ), e = 75.7), { ifcId: (r == null ? void 0 : r.GlobalId) ?? "demo", segments: t, totalLength: e };
 }
 const L = {
-  "vehicletrack:calculate"(r) {
+  vehicletrack(r) {
     return {
       async createRule() {
         return {
@@ -342,4 +342,4 @@ const L = {
 export {
   L as default
 };
-//# sourceMappingURL=index-ClAweXiW.mjs.map
+//# sourceMappingURL=index-nPRaNK8M.mjs.map
