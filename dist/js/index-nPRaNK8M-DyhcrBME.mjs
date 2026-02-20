@@ -45,27 +45,27 @@ const x = {
     totalLength: 18
   }
 };
-function k(r, t, e) {
+function R(n, t, e) {
   return {
-    x: r.x + e * Math.cos(t + Math.PI / 2),
-    y: r.y + e * Math.sin(t + Math.PI / 2),
-    z: r.z
+    x: n.x + e * Math.cos(t + Math.PI / 2),
+    y: n.y + e * Math.sin(t + Math.PI / 2),
+    z: n.z
   };
 }
-function b(r, t) {
-  return Math.atan2(t.y - r.y, t.x - r.x);
+function P(n, t) {
+  return Math.atan2(t.y - n.y, t.x - n.x);
 }
-function F(r, t, e, n, i = 32) {
+function F(n, t, e, r, i = 32) {
   const a = [];
-  let s = n - e;
-  for (; s > Math.PI; ) s -= 2 * Math.PI;
-  for (; s < -Math.PI; ) s += 2 * Math.PI;
-  for (let o = 0; o <= i; o++) {
-    const u = e + s * o / i;
+  let o = r - e;
+  for (; o > Math.PI; ) o -= 2 * Math.PI;
+  for (; o < -Math.PI; ) o += 2 * Math.PI;
+  for (let s = 0; s <= i; s++) {
+    const u = e + o * s / i;
     a.push({
-      x: r.x + t * Math.cos(u),
-      y: r.y + t * Math.sin(u),
-      z: r.z
+      x: n.x + t * Math.cos(u),
+      y: n.y + t * Math.sin(u),
+      z: n.z
     });
   }
   return a;
@@ -85,27 +85,27 @@ class T {
    * R_outer = R + (wheelbase/2 + trackWidth/2 + overhangFront)
    */
   outerRadius(t) {
-    const { wheelbase: e, trackWidth: n, overhangFront: i } = this.vehicle;
-    return t + (e / 2 + n / 2 + i);
+    const { wheelbase: e, trackWidth: r, overhangFront: i } = this.vehicle;
+    return t + (e / 2 + r / 2 + i);
   }
   /**
    * Внутренний радиус поворота (AutoTURN формула)
    * R_inner = R - (wheelbase/2 + trackWidth/2)
    */
   innerRadius(t) {
-    const { wheelbase: e, trackWidth: n } = this.vehicle;
-    return Math.max(0.1, t - (e / 2 + n / 2));
+    const { wheelbase: e, trackWidth: r } = this.vehicle;
+    return Math.max(0.1, t - (e / 2 + r / 2));
   }
   /**
    * Расчёт коридора для одного прямого сегмента трассы
    */
   straightSegmentCorridor(t) {
-    const e = b(t.start, t.end), n = this.straightWidth / 2, i = [
-      k(t.start, e, n),
-      k(t.end, e, n)
+    const e = P(t.start, t.end), r = this.straightWidth / 2, i = [
+      R(t.start, e, r),
+      R(t.end, e, r)
     ], a = [
-      k(t.start, e, -n),
-      k(t.end, e, -n)
+      R(t.start, e, -r),
+      R(t.end, e, -r)
     ];
     return { outer: i, inner: a };
   }
@@ -115,17 +115,17 @@ class T {
   arcSegmentCorridor(t) {
     if (!t.center || !t.radius)
       throw new Error("Дуговой сегмент должен содержать center и radius");
-    const e = t.radius, n = t.direction === "right", i = this.outerRadius(e), a = this.innerRadius(e), s = b(t.center, t.start), o = b(t.center, t.end), u = n ? i : a, p = n ? a : i, f = F(t.center, u, s, o), m = F(t.center, p, s, o);
-    return { outer: f, inner: m };
+    const e = t.radius, r = t.direction === "right", i = this.outerRadius(e), a = this.innerRadius(e), o = P(t.center, t.start), s = P(t.center, t.end), u = r ? i : a, g = r ? a : i, d = F(t.center, u, o, s), p = F(t.center, g, o, s);
+    return { outer: d, inner: p };
   }
   /**
    * Расчёт полного коридора движения по трассе
    */
   calculateCorridor(t) {
-    const e = [], n = [];
+    const e = [], r = [];
     for (const a of t.segments) {
-      let s, o;
-      a.type === "straight" ? { outer: s, inner: o } = this.straightSegmentCorridor(a) : { outer: s, inner: o } = this.arcSegmentCorridor(a), e.length > 0 && (s.shift(), o.shift()), e.push(...s), n.push(...o);
+      let o, s;
+      a.type === "straight" ? { outer: o, inner: s } = this.straightSegmentCorridor(a) : { outer: o, inner: s } = this.arcSegmentCorridor(a), e.length > 0 && (o.shift(), s.shift()), e.push(...o), r.push(...s);
     }
     const i = this.vehicle.minTurningRadius;
     return {
@@ -133,44 +133,44 @@ class T {
       innerRadius: this.innerRadius(i),
       straightWidth: this.straightWidth,
       outerPolyline: e,
-      innerPolyline: n
+      innerPolyline: r
     };
   }
 }
-function w(r) {
-  var a, s, o, u, p, f, m;
-  const t = [];
-  let e = 0;
-  const n = ((o = (s = (a = r == null ? void 0 : r.IsDecomposedBy) == null ? void 0 : a[0]) == null ? void 0 : s.RelatedObjects) == null ? void 0 : o.find(
-    (d) => (d == null ? void 0 : d.type) === "IfcAlignmentHorizontal"
-  )) ?? r, i = ((p = (u = n == null ? void 0 : n.IsDecomposedBy) == null ? void 0 : u[0]) == null ? void 0 : p.RelatedObjects) ?? [];
-  for (const d of i) {
-    const c = d == null ? void 0 : d.DesignParameters;
-    if (c && c.type === "IfcAlignmentHorizontalSegment") {
-      const g = { x: ((f = c.StartPoint) == null ? void 0 : f.x) ?? 0, y: ((m = c.StartPoint) == null ? void 0 : m.y) ?? 0, z: 0 }, h = c.SegmentLength ?? 10;
-      if (c.PredefinedType === "LINE") {
-        const l = c.StartDirection ?? 0, y = {
-          x: g.x + h * Math.cos(l),
-          y: g.y + h * Math.sin(l),
+function w(n) {
+  var t, e, r, i, a, o, s;
+  const u = [];
+  let g = 0;
+  const d = ((r = (e = (t = n == null ? void 0 : n.IsDecomposedBy) == null ? void 0 : t[0]) == null ? void 0 : e.RelatedObjects) == null ? void 0 : r.find(
+    (v) => (v == null ? void 0 : v.type) === "IfcAlignmentHorizontal"
+  )) ?? n, p = ((a = (i = d == null ? void 0 : d.IsDecomposedBy) == null ? void 0 : i[0]) == null ? void 0 : a.RelatedObjects) ?? [];
+  for (const v of p) {
+    const l = v == null ? void 0 : v.DesignParameters;
+    if (l && l.type === "IfcAlignmentHorizontalSegment") {
+      const c = { x: ((o = l.StartPoint) == null ? void 0 : o.x) ?? 0, y: ((s = l.StartPoint) == null ? void 0 : s.y) ?? 0, z: 0 }, m = l.SegmentLength ?? 10;
+      if (l.PredefinedType === "LINE") {
+        const h = l.StartDirection ?? 0, y = {
+          x: c.x + m * Math.cos(h),
+          y: c.y + m * Math.sin(h),
           z: 0
         };
-        t.push({ type: "straight", start: g, end: y, length: h });
-      } else if (c.PredefinedType === "CIRCULARARC") {
-        const l = c.Radius ?? 10, y = c.IsCCW ? "left" : "right", R = c.StartDirection ?? 0, v = y === "left" ? 1 : -1, P = {
-          x: g.x + l * Math.cos(R + v * Math.PI / 2),
-          y: g.y + l * Math.sin(R + v * Math.PI / 2),
+        u.push({ type: "straight", start: c, end: y, length: m });
+      } else if (l.PredefinedType === "CIRCULARARC") {
+        const h = l.Radius ?? 10, y = l.IsCCW ? "left" : "right", b = l.StartDirection ?? 0, f = y === "left" ? 1 : -1, k = {
+          x: c.x + h * Math.cos(b + f * Math.PI / 2),
+          y: c.y + h * Math.sin(b + f * Math.PI / 2),
           z: 0
-        }, W = h / l, I = R - v * Math.PI / 2 + v * W, M = {
-          x: P.x + l * Math.cos(I),
-          y: P.y + l * Math.sin(I),
+        }, W = m / h, I = b - f * Math.PI / 2 + f * W, M = {
+          x: k.x + h * Math.cos(I),
+          y: k.y + h * Math.sin(I),
           z: 0
         };
-        t.push({ type: "arc", start: g, end: M, length: h, radius: l, direction: y, center: P });
+        u.push({ type: "arc", start: c, end: M, length: m, radius: h, direction: y, center: k });
       }
-      e += h;
+      g += m;
     }
   }
-  return t.length === 0 && (t.push(
+  return u.length === 0 && (u.push(
     { type: "straight", start: { x: 0, y: 0, z: 0 }, end: { x: 30, y: 0, z: 0 }, length: 30 },
     {
       type: "arc",
@@ -182,10 +182,10 @@ function w(r) {
       center: { x: 30, y: 10, z: 0 }
     },
     { type: "straight", start: { x: 40, y: 10, z: 0 }, end: { x: 40, y: 40, z: 0 }, length: 30 }
-  ), e = 75.7), { ifcId: (r == null ? void 0 : r.GlobalId) ?? "demo", segments: t, totalLength: e };
+  ), g = 75.7), { ifcId: (n == null ? void 0 : n.GlobalId) ?? "demo", segments: u, totalLength: g };
 }
 const L = {
-  vehicletrack(r) {
+  vehicletrack(n) {
     return {
       async createRule() {
         return {
@@ -197,18 +197,18 @@ const L = {
           customTurningRadius: 9
         };
       },
-      async execute(t, e, n, i) {
-        var d, c, g;
-        const a = t.model;
-        if (!a) {
-          n.set("error", [{
-            message: r.tr("Модель не загружена"),
+      async execute(t, e, r, i) {
+        var a, o, s;
+        const u = t.model;
+        if (!u) {
+          r.set("error", [{
+            message: n.tr("Модель не загружена"),
             severity: 1
           }]);
           return;
         }
-        let s;
-        e.vehiclePreset === "custom" ? s = {
+        let g;
+        e.vehiclePreset === "custom" ? g = {
           name: "Пользовательское ТС",
           wheelbase: e.customWheelbase,
           trackWidth: e.customTrackWidth,
@@ -216,52 +216,52 @@ const L = {
           overhangRear: e.customOverhangRear,
           minTurningRadius: e.customTurningRadius,
           totalLength: e.customWheelbase + e.customOverhangFront + e.customOverhangRear
-        } : s = x[e.vehiclePreset];
-        const o = [];
-        if ((g = (c = (d = a.layouts) == null ? void 0 : d.model) == null ? void 0 : c.walk) == null || g.call(c, (h) => (((h == null ? void 0 : h.type) === "IfcAlignment" || (h == null ? void 0 : h.ifcType) === "IFCALIGNMENT") && o.push(h), !1)), o.length === 0) {
-          n.set("no-alignment", [{
-            message: r.tr("Трассы (IfcAlignment) не найдены в модели"),
+        } : g = x[e.vehiclePreset];
+        const d = [];
+        if ((s = (o = (a = u.layouts) == null ? void 0 : a.model) == null ? void 0 : o.walk) == null || s.call(o, (c) => (((c == null ? void 0 : c.type) === "IfcAlignment" || (c == null ? void 0 : c.ifcType) === "IFCALIGNMENT") && d.push(c), !1)), d.length === 0) {
+          r.set("no-alignment", [{
+            message: n.tr("Трассы (IfcAlignment) не найдены в модели"),
             severity: 1
           }]);
           return;
         }
-        let u = o[0];
-        if (o.length > 1) {
-          const h = o.map((y, R) => ({
-            key: String(R),
-            label: y.Name ?? y.GlobalId ?? `Трасса ${R + 1}`,
-            description: `Длина: ${(y.TotalLength ?? 0).toFixed(1)} м`
-          })), l = await r.showQuickPick(h, {
-            placeHolder: r.tr("Выберите трассу для расчёта коридора")
+        let p = d[0];
+        if (d.length > 1) {
+          const c = d.map((h, y) => ({
+            key: String(y),
+            label: h.Name ?? h.GlobalId ?? `Трасса ${y + 1}`,
+            description: `Длина: ${(h.TotalLength ?? 0).toFixed(1)} м`
+          })), m = await n.showQuickPick(c, {
+            placeHolder: n.tr("Выберите трассу для расчёта коридора")
           });
-          u = o[parseInt(l.key)];
+          p = d[parseInt(m.key)];
         }
-        const p = w(u), m = new T(s).calculateCorridor(p);
-        n.set("result", [{
-          message: r.tr(
+        const v = w(p), l = new T(g).calculateCorridor(v);
+        r.set("result", [{
+          message: n.tr(
             "Коридор построен. ТС: {0}. Ширина прямой: {1} м. R внешний: {2} м. R внутренний: {3} м.",
-            s.name,
-            m.straightWidth.toFixed(2),
-            m.outerRadius.toFixed(2),
-            m.innerRadius.toFixed(2)
+            g.name,
+            l.straightWidth.toFixed(2),
+            l.outerRadius.toFixed(2),
+            l.innerRadius.toFixed(2)
           ),
           severity: 0
         }]);
       }
     };
   },
-  "property:vehiclePreset"(r) {
+  "property:vehiclePreset"(n) {
     return {
       getProperties(t) {
         return [{
           id: "vehicletrack-preset",
-          label: r.label ?? "Тип транспортного средства",
-          description: r.description,
-          group: r.group,
+          label: n.label ?? "Тип транспортного средства",
+          description: n.description,
+          group: n.group,
           value() {
-            var i;
-            const e = (i = t[0]) == null ? void 0 : i.vehiclePreset, n = e !== "custom" ? x[e] : null;
-            return { label: (n == null ? void 0 : n.name) ?? "Пользовательский" };
+            var e;
+            const r = (e = t[0]) == null ? void 0 : e.vehiclePreset, i = r !== "custom" ? x[r] : null;
+            return { label: (i == null ? void 0 : i.name) ?? "Пользовательский" };
           },
           editor() {
             return {
@@ -275,13 +275,13 @@ const L = {
                   { key: "bus_12m", label: "Автобус 12 м", description: "L=12м, R=10.5м" },
                   { key: "bus_articulated", label: "Автобус сочленённый 18 м", description: "L=18м, R=11.5м" },
                   { key: "custom", label: "Пользовательский...", description: "Задать параметры вручную" }
-                ], n = await r.showQuickPick(e, {
+                ], r = await n.showQuickPick(e, {
                   placeHolder: "Выберите тип транспортного средства"
                 });
                 for (const i of t)
                   try {
-                    if (i.vehiclePreset = n.key, n.key !== "custom") {
-                      const a = x[n.key];
+                    if (i.vehiclePreset = r.key, r.key !== "custom") {
+                      const a = x[r.key];
                       i.customWheelbase = a.wheelbase, i.customTrackWidth = a.trackWidth, i.customOverhangFront = a.overhangFront, i.customOverhangRear = a.overhangRear, i.customTurningRadius = a.minTurningRadius;
                     }
                   } catch (a) {
@@ -296,41 +296,41 @@ const L = {
       }
     };
   },
-  "property:numericParam"(r) {
+  "property:numericParam"(n) {
     return {
       getProperties(t) {
-        const e = r.field;
+        const e = n.field;
         return e ? [{
           id: `vehicletrack-${String(e)}`,
-          label: r.label ?? String(e),
-          description: r.description,
-          group: r.group,
+          label: n.label ?? String(e),
+          description: n.description,
+          group: n.group,
           value() {
-            var i;
-            const n = (i = t[0]) == null ? void 0 : i[e];
+            var r;
+            const i = (r = t[0]) == null ? void 0 : r[e];
             for (let a = 1; a < t.length; a++)
-              if (t[a][e] !== n)
+              if (t[a][e] !== i)
                 return { label: "**Различные**", suffix: "м" };
-            return { label: String(n), suffix: "м" };
+            return { label: String(i), suffix: "м" };
           },
           editor() {
             return {
               type: "editbox",
-              commit(n) {
-                if (!n) return;
-                const i = parseFloat(n);
+              commit(r) {
+                if (!r) return;
+                const i = parseFloat(r);
                 if (!(!isFinite(i) || i <= 0))
                   for (const a of t)
                     try {
                       a[e] = i;
-                    } catch (s) {
-                      console.error(s);
+                    } catch (o) {
+                      console.error(o);
                     }
               },
-              validate(n) {
-                if (!n) return "Поле не может быть пустым";
-                if (!isFinite(parseFloat(n))) return "Введите число";
-                if (parseFloat(n) <= 0) return "Значение должно быть больше 0";
+              validate(r) {
+                if (!r) return "Поле не может быть пустым";
+                if (!isFinite(parseFloat(r))) return "Введите число";
+                if (parseFloat(r) <= 0) return "Значение должно быть больше 0";
               }
             };
           }
@@ -342,4 +342,4 @@ const L = {
 export {
   L as default
 };
-//# sourceMappingURL=index-nPRaNK8M.mjs.map
+//# sourceMappingURL=index-nPRaNK8M-DyhcrBME.mjs.map
