@@ -11,9 +11,9 @@ declare interface VehicleTrackRule {
     customTurningRadius: number;
 }
 
-// CAD цвета: 1=красный, 2=жёлтый, 3=зелёный, 4=голубой, 5=синий, 6=пурпурный, 7=белый
-const COLOR_GREEN = 3;  // коридор
-const COLOR_RED   = 1;  // ТС
+// CAD цвета: 1=красный, 3=зелёный
+const COLOR_GREEN = 3;
+const COLOR_RED   = 1;
 
 type vec3 = [number, number, number];
 
@@ -21,36 +21,74 @@ function toVec3(p: Point3D): vec3 {
     return [p.x, p.y, 0];
 }
 
-/**
- * Рисует коридор движения (зелёный) и контур ТС (красный) через API Albatros
- */
 async function drawCorridor(
+    app: any,
     ctx: Context,
     result: CorridorResult,
     vehicle: VehicleParams,
     alignmentStart: Point3D,
     alignmentAngle: number,
 ): Promise<void> {
-    const cadview = ctx.cadview;
-    if (!cadview) {
-        console.warn('[VehicleTrack] cadview недоступен');
+
+    // Пробуем получить editor разными способами
+    let editor: any = null;
+
+    // Способ 1: через app.model (контекст правила диагностики)
+    try {
+        editor = app?.model?.layouts?.model?.editor?.();
+        if (editor) console.log('[VehicleTrack] editor получен через app.model');
+    } catch (e) {
+        console.warn('[VehicleTrack] app.model.editor не сработал:', e);
+    }
+
+    // Способ 2: через ctx.cadview (как в документации)
+    if (!editor) {
+        try {
+            const cadview = (ctx as any).cadview;
+            console.log('[VehicleTrack] ctx.cadview =', cadview);
+            if (cadview) {
+                const dwg = cadview.layer?.drawing?.layout?.drawing;
+                console.log('[VehicleTrack] drawing =', dwg);
+                editor = dwg?.layouts?.model?.editor?.();
+                if (editor) console.log('[VehicleTrack] editor получен через ctx.cadview');
+            }
+        } catch (e) {
+            console.warn('[VehicleTrack] ctx.cadview.editor не сработал:', e);
+        }
+    }
+
+    // Способ 3: через ctx напрямую
+    if (!editor) {
+        try {
+            editor = (ctx as any)?.editor?.();
+            if (editor) console.log('[VehicleTrack] editor получен через ctx.editor()');
+        } catch (e) {
+            console.warn('[VehicleTrack] ctx.editor не сработал:', e);
+        }
+    }
+
+    if (!editor) {
+        console.error('[VehicleTrack] Не удалось получить editor ни одним способом');
+        console.log('[VehicleTrack] Доступные ключи ctx:', Object.keys(ctx as any));
+        console.log('[VehicleTrack] Доступные ключи app:', Object.keys(app));
+        console.log('[VehicleTrack] app.model ключи:', app?.model ? Object.keys(app.model) : 'нет');
         return;
     }
 
-    const drawing = cadview.layer.drawing!.layout.drawing!;
-    const editor = drawing.layouts.model!.editor();
+    console.log('[VehicleTrack] Начинаем отрисовку. Точек внешнего контура:', result.outerPolyline.length);
 
-    // ── 1. Коридор: внешний контур (зелёный, замкнутая полилиния) ──────────
+    // ── Коридор: внешний контур (зелёный) ──────────────────────────────────
     if (result.outerPolyline.length > 1) {
         await editor.addPolyline({
             color: COLOR_GREEN,
             vertices: result.outerPolyline.map(toVec3),
             width: 0.5,
-            flags: 0x0, // разомкнутая — это граница
+            flags: 0x0,
         });
+        console.log('[VehicleTrack] Внешний контур отрисован');
     }
 
-    // ── 2. Коридор: внутренний контур (зелёный пунктир через ширину=0) ─────
+    // ── Коридор: внутренний контур (зелёный) ───────────────────────────────
     if (result.innerPolyline.length > 1) {
         await editor.addPolyline({
             color: COLOR_GREEN,
@@ -58,14 +96,13 @@ async function drawCorridor(
             width: 0.5,
             flags: 0x0,
         });
+        console.log('[VehicleTrack] Внутренний контур отрисован');
     }
 
-    // ── 3. Заливка коридора солидами (зелёный) ──────────────────────────────
-    // Разбиваем коридор на четырёхугольники между соседними точками контуров
+    // ── Заливка коридора солидами (зелёный) ────────────────────────────────
     const outerPts = result.outerPolyline;
     const innerPts = result.innerPolyline;
     const count = Math.min(outerPts.length, innerPts.length) - 1;
-
     for (let i = 0; i < count; i++) {
         await editor.addSolid({
             color: COLOR_GREEN,
@@ -75,16 +112,15 @@ async function drawCorridor(
             d: toVec3(innerPts[i + 1]),
         });
     }
+    console.log('[VehicleTrack] Заливка коридора отрисована, солидов:', count);
 
-    // ── 4. Контур ТС (красный прямоугольник) ────────────────────────────────
-    // Рисуем ТС в начале трассы
+    // ── Контур ТС (красный прямоугольник) ──────────────────────────────────
     const cos = Math.cos(alignmentAngle);
     const sin = Math.sin(alignmentAngle);
     const L  = vehicle.totalLength;
     const W  = vehicle.trackWidth;
     const oF = vehicle.overhangFront;
 
-    // Четыре угла прямоугольника ТС относительно начала трассы
     function rotated(dx: number, dy: number): vec3 {
         return [
             alignmentStart.x + dx * cos - dy * sin,
@@ -94,13 +130,13 @@ async function drawCorridor(
     }
 
     const vehicleVertices: vec3[] = [
-        rotated(-oF,       -W / 2),  // зад-лево
-        rotated(L - oF,    -W / 2),  // перед-лево
-        rotated(L - oF,     W / 2),  // перед-право
-        rotated(-oF,        W / 2),  // зад-право
+        rotated(-oF,      -W / 2),
+        rotated(L - oF,   -W / 2),
+        rotated(L - oF,    W / 2),
+        rotated(-oF,       W / 2),
     ];
 
-    // Замкнутая полилиния — контур ТС
+    // Контур ТС
     await editor.addPolyline({
         color: COLOR_RED,
         vertices: vehicleVertices,
@@ -108,7 +144,7 @@ async function drawCorridor(
         flags: 0x1, // замкнутая
     });
 
-    // Заливка ТС двумя солидами (делим прямоугольник по диагонали)
+    // Заливка ТС
     await editor.addSolid({
         color: COLOR_RED,
         a: vehicleVertices[0],
@@ -117,14 +153,14 @@ async function drawCorridor(
         d: vehicleVertices[2],
     });
 
-    // Стрелка направления движения (линия от центра к переду)
-    const cx = alignmentStart.x;
-    const cy = alignmentStart.y;
+    // Стрелка направления
     await editor.addLine({
         color: COLOR_RED,
-        a: [cx, cy, 0] as vec3,
+        a: [alignmentStart.x, alignmentStart.y, 0] as vec3,
         b: rotated(L - oF, 0),
     });
+
+    console.log('[VehicleTrack] ТС отрисовано');
 }
 
 export default {
@@ -145,6 +181,13 @@ export default {
             },
 
             async execute(app, rule, diagnostics, _progress) {
+                console.log('[VehicleTrack] execute запущен');
+                console.log('[VehicleTrack] ctx keys:', Object.keys(ctx as any));
+                console.log('[VehicleTrack] ctx.cadview:', (ctx as any).cadview);
+                console.log('[VehicleTrack] app keys:', Object.keys(app));
+                console.log('[VehicleTrack] app.model:', app.model);
+                console.log('[VehicleTrack] app.model keys:', app?.model ? Object.keys(app.model as any) : 'нет');
+
                 const drawing = app.model as any;
                 if (!drawing) {
                     diagnostics.set('error', [{
@@ -172,6 +215,8 @@ export default {
 
                 // Поиск трасс через filterLayers
                 const layers = drawing.filterLayers(rule.filter, true);
+                console.log('[VehicleTrack] layers.size =', layers.size);
+
                 if (layers.size === 0) {
                     diagnostics.set('no-alignment', [{
                         message: ctx.tr('Трассы не найдены. Проверьте фильтр трассы.'),
@@ -181,24 +226,26 @@ export default {
                 }
 
                 const layer = [...layers][0];
+                console.log('[VehicleTrack] layer keys:', Object.keys(layer));
+
                 const alignment = parseIfcAlignment(layer);
+                console.log('[VehicleTrack] alignment segments:', alignment.segments.length);
+
                 const calculator = new VehicleTrackCalculator(vehicle);
                 const result = calculator.calculateCorridor(alignment);
+                console.log('[VehicleTrack] corridor outer pts:', result.outerPolyline.length);
 
-                // Начало трассы и угол для позиционирования ТС
                 const startSeg = alignment.segments[0];
                 const startPt  = startSeg.start;
                 const endPt    = startSeg.end;
                 const angle    = Math.atan2(endPt.y - startPt.y, endPt.x - startPt.x);
 
-                // Отрисовка в cadview
                 try {
-                    await drawCorridor(ctx, result, vehicle, startPt, angle);
+                    await drawCorridor(app, ctx, result, vehicle, startPt, angle);
                 } catch (drawErr) {
-                    console.warn('[VehicleTrack] Ошибка отрисовки:', drawErr);
+                    console.error('[VehicleTrack] Ошибка отрисовки:', drawErr);
                 }
 
-                // Результат в диагностику
                 diagnostics.set('result', [{
                     message: ctx.tr(
                         'Коридор построен. ТС: {0}. Ширина: {1} м. R внешний: {2} м. R внутренний: {3} м.',
