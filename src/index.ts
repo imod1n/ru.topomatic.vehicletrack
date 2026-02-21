@@ -2,6 +2,7 @@ import { VEHICLE_PRESETS, VehicleTrackCalculator, parseIfcAlignment } from './ca
 import type { VehicleParams, VehiclePreset } from './types';
 
 declare interface VehicleTrackRule {
+    filter: string;
     vehiclePreset: VehiclePreset;
     customWheelbase: number;
     customTrackWidth: number;
@@ -17,6 +18,7 @@ export default {
 
             async createRule() {
                 return {
+                    filter: '',
                     vehiclePreset: 'truck_16m' as VehiclePreset,
                     customWheelbase: 5.5,
                     customTrackWidth: 2.5,
@@ -52,39 +54,20 @@ export default {
                     vehicle = VEHICLE_PRESETS[rule.vehiclePreset];
                 }
 
-                // Ищем трассы в модели
-                const alignments: any[] = [];
-                drawing.layouts?.model?.walk?.((e: any) => {
-                    if (e?.type === 'IfcAlignment' || e?.ifcType === 'IFCALIGNMENT') {
-                        alignments.push(e);
-                    }
-                    return false;
-                });
+                // Ищем трассы через filterLayers (как в ru.topomatic.rule.volume)
+                const layers = drawing.filterLayers(rule.filter, true);
 
-                if (alignments.length === 0) {
+                if (layers.size === 0) {
                     diagnostics.set('no-alignment', [{
-                        message: ctx.tr('Трассы (IfcAlignment) не найдены в модели'),
+                        message: ctx.tr('Трассы не найдены. Проверьте фильтр трассы.'),
                         severity: 1,
                     }]);
                     return;
                 }
 
-                // Выбор трассы если их несколько
-                let selectedAlignment = alignments[0];
-                if (alignments.length > 1) {
-                    const items = alignments.map((a, i) => ({
-                        key: String(i),
-                        label: a.Name ?? a.GlobalId ?? `Трасса ${i + 1}`,
-                        description: `Длина: ${(a.TotalLength ?? 0).toFixed(1)} м`,
-                    }));
-                    const picked = await ctx.showQuickPick(items, {
-                        placeHolder: ctx.tr('Выберите трассу для расчёта коридора'),
-                    });
-                    selectedAlignment = alignments[parseInt(picked.key)];
-                }
-
-                // Расчёт коридора
-                const alignment = parseIfcAlignment(selectedAlignment);
+                // Берём первый подходящий слой как трассу
+                const layer = [...layers][0];
+                const alignment = parseIfcAlignment(layer);
                 const calculator = new VehicleTrackCalculator(vehicle);
                 const result = calculator.calculateCorridor(alignment);
 

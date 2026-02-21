@@ -4,7 +4,7 @@
     "displayName": "Коридор движения ТС",
     "description": "Расчёт траекторий движения транспортных средств и коридоров движения (аналог AutoTURN)",
     "version": "1.0.0",
-    "main": "dist/js/index-nPRaNK8M-DyhcrBME.mjs",
+    "main": "dist/js/index-BzJ5onfP.mjs",
     "scripts": {
         "serve": "albatros-cli serve",
         "build": "albatros-cli build"
@@ -31,6 +31,12 @@
         },
         "properties": {
             "vehicletrack": [
+                {
+                    "cmd": "ru.albatros.wdx/property:filter",
+                    "label": "Фильтр трассы",
+                    "field": "filter",
+                    "description": "Фильтр для выбора объектов трассы"
+                },
                 {
                     "cmd": "property:vehiclePreset",
                     "label": "Тип ТС",
@@ -70,3 +76,4 @@
         }
     }
 }
+
