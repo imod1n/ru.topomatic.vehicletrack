@@ -16,7 +16,7 @@ export default defineConfig({
         exports: 'named',
       },
     },
-    sourcemap: true,
+    sourcemap: false,
     minify: false,
   },
 });

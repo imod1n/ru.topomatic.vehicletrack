@@ -164,6 +164,7 @@ async function drawCorridor(
 }
 
 export default {
+    // DEBUG MARKER 12345
 
     'vehicletrack'(ctx: Context): DiagnosticRule<VehicleTrackRule> {
         return {
@@ -355,3 +356,5 @@ export default {
         };
     },
 };
+
+

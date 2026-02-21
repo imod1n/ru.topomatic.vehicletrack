@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "type": "msedge",
+            "name": "Топоматик 360 (браузер)",
+            "request": "launch",
+            "url": "https://360.topomatic.ru?extensionDevelopmentPath=http://localhost:9092"
+        },
+        {
+            "type": "node",
+            "name": "Топоматик 360 Desktop (отладка)",
+            "request": "launch",
+            "runtimeExecutable": "c:\\Program Files\\topomatic360\\topomatic360.exe",
+            "runtimeArgs": [
+                "--extensionDevelopmentPath=http://localhost:9091",
+                "--remote-debugging-port=9222"
+            ],
+            "port": 9222,
+            "timeout": 30000
+        }
+    ]
+}
