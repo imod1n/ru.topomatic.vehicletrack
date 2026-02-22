@@ -48,6 +48,21 @@ async function drawCorridor(
     const layoutModel = app?.model?.layouts?.model;
     log.push('layout.model keys: ' + Object.keys(layoutModel ?? {}).join(', '));
 
+    // Исследуем editor.layout и editor.updates
+    try {
+        const editorLayout = editor.layout;
+        log.push('editor.layout keys: ' + Object.keys(editorLayout ?? {}).join(', '));
+    } catch(e) { log.push('editor.layout error: ' + e); }
+    try {
+        const editorUpdates = editor.updates;
+        log.push('editor.updates type: ' + typeof editorUpdates + ' | isArray: ' + Array.isArray(editorUpdates));
+        if (editorUpdates && typeof editorUpdates === 'object') {
+            log.push('editor.updates keys: ' + Object.keys(editorUpdates).join(', '));
+        }
+    } catch(e) { log.push('editor.updates error: ' + e); }
+
+    return log; // Пока не рисуем, только исследуем
+
     // Коридор внешний контур
     if (result.outerPolyline.length > 1) {
         await editor.addPolyline({
