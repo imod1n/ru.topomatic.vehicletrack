@@ -43,6 +43,11 @@ async function drawCorridor(
         return log;
     }
 
+    // Логируем методы editor и layout
+    log.push('editor keys: ' + Object.keys(editor).join(', '));
+    const layoutModel = app?.model?.layouts?.model;
+    log.push('layout.model keys: ' + Object.keys(layoutModel ?? {}).join(', '));
+
     // Коридор внешний контур
     if (result.outerPolyline.length > 1) {
         await editor.addPolyline({
