@@ -4,7 +4,7 @@
     "displayName": "Коридор движения ТС",
     "description": "Расчёт траекторий движения транспортных средств и коридоров движения (аналог AutoTURN)",
     "version": "1.0.0",
-    "main": "dist/js/index-BzJ5onfP-C8125nU3-C8125nU3-C8125nU3.mjs",
+    "main": "dist/js/index-BzJ5onfP-C8125nU3-C8125nU3-C8125nU3-C8125nU3.mjs",
     "scripts": {
         "serve": "albatros-cli serve",
         "build": "albatros-cli build"
@@ -76,6 +76,7 @@
         }
     }
 }
+
 
 
 

@@ -2,6 +2,11 @@ import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
 export default defineConfig({
+  server: {
+    host: '127.0.0.1',
+    port: 9091,
+    strictPort: true,
+  },
   build: {
     lib: {
       entry: resolve(__dirname, 'src/index.ts'),
@@ -10,7 +15,6 @@ export default defineConfig({
       formats: ['es', 'cjs'],
     },
     rollupOptions: {
-      // Все зависимости платформы — внешние
       external: ['albatros/enums', 'albatros'],
       output: {
         exports: 'named',

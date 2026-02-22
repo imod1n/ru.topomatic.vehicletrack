@@ -1,10 +1,17 @@
 {
     "configurations": [
         {
+            "name": "Launch Chrome",
+            "request": "launch",
+            "type": "chrome",
+            "url": "https://360.topomatic.ru?extensionDevelopmentPath=http%3A%2F%2Flocalhost%3A9091",
+            "webRoot": "${workspaceFolder}"
+        },
+        {
             "type": "msedge",
             "name": "Топоматик 360 (браузер)",
             "request": "launch",
-            "url": "https://360.topomatic.ru?extensionDevelopmentPath=http://localhost:9092"
+            "url": "https://360.topomatic.ru?extensionDevelopmentPath=http%3A%2F%2Flocalhost%3A9091"
         },
         {
             "type": "node",
@@ -12,7 +19,7 @@
             "request": "launch",
             "runtimeExecutable": "c:\\Program Files\\topomatic360\\topomatic360.exe",
             "runtimeArgs": [
-                "--extensionDevelopmentPath=http://localhost:9091",
+                "--extensionDevelopmentPath=http%3A%2F%2Flocalhost%3A9091",
                 "--remote-debugging-port=9222"
             ],
             "port": 9222,

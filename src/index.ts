@@ -11,10 +11,8 @@ declare interface VehicleTrackRule {
     customTurningRadius: number;
 }
 
-// CAD цвета: 1=красный, 3=зелёный
 const COLOR_GREEN = 3;
 const COLOR_RED   = 1;
-
 type vec3 = [number, number, number];
 
 function toVec3(p: Point3D): vec3 {
@@ -23,61 +21,29 @@ function toVec3(p: Point3D): vec3 {
 
 async function drawCorridor(
     app: any,
-    ctx: Context,
     result: CorridorResult,
     vehicle: VehicleParams,
     alignmentStart: Point3D,
     alignmentAngle: number,
-): Promise<void> {
+): Promise<string[]> {
+    const log: string[] = [];
 
-    // Пробуем получить editor разными способами
+    // Получаем editor через app.model
     let editor: any = null;
-
-    // Способ 1: через app.model (контекст правила диагностики)
     try {
         editor = app?.model?.layouts?.model?.editor?.();
-        if (editor) console.log('[VehicleTrack] editor получен через app.model');
+        if (editor) log.push('editor: OK через app.model');
+        else log.push('editor: null через app.model');
     } catch (e) {
-        console.warn('[VehicleTrack] app.model.editor не сработал:', e);
-    }
-
-    // Способ 2: через ctx.cadview (как в документации)
-    if (!editor) {
-        try {
-            const cadview = (ctx as any).cadview;
-            console.log('[VehicleTrack] ctx.cadview =', cadview);
-            if (cadview) {
-                const dwg = cadview.layer?.drawing?.layout?.drawing;
-                console.log('[VehicleTrack] drawing =', dwg);
-                editor = dwg?.layouts?.model?.editor?.();
-                if (editor) console.log('[VehicleTrack] editor получен через ctx.cadview');
-            }
-        } catch (e) {
-            console.warn('[VehicleTrack] ctx.cadview.editor не сработал:', e);
-        }
-    }
-
-    // Способ 3: через ctx напрямую
-    if (!editor) {
-        try {
-            editor = (ctx as any)?.editor?.();
-            if (editor) console.log('[VehicleTrack] editor получен через ctx.editor()');
-        } catch (e) {
-            console.warn('[VehicleTrack] ctx.editor не сработал:', e);
-        }
+        log.push(`editor error: ${e}`);
     }
 
     if (!editor) {
-        console.error('[VehicleTrack] Не удалось получить editor ни одним способом');
-        console.log('[VehicleTrack] Доступные ключи ctx:', Object.keys(ctx as any));
-        console.log('[VehicleTrack] Доступные ключи app:', Object.keys(app));
-        console.log('[VehicleTrack] app.model ключи:', app?.model ? Object.keys(app.model) : 'нет');
-        return;
+        log.push('Доступные ключи app.model: ' + Object.keys(app?.model ?? {}).join(', '));
+        return log;
     }
 
-    console.log('[VehicleTrack] Начинаем отрисовку. Точек внешнего контура:', result.outerPolyline.length);
-
-    // ── Коридор: внешний контур (зелёный) ──────────────────────────────────
+    // Коридор внешний контур
     if (result.outerPolyline.length > 1) {
         await editor.addPolyline({
             color: COLOR_GREEN,
@@ -85,10 +51,10 @@ async function drawCorridor(
             width: 0.5,
             flags: 0x0,
         });
-        console.log('[VehicleTrack] Внешний контур отрисован');
+        log.push(`Внешний контур: ${result.outerPolyline.length} точек`);
     }
 
-    // ── Коридор: внутренний контур (зелёный) ───────────────────────────────
+    // Коридор внутренний контур
     if (result.innerPolyline.length > 1) {
         await editor.addPolyline({
             color: COLOR_GREEN,
@@ -96,10 +62,10 @@ async function drawCorridor(
             width: 0.5,
             flags: 0x0,
         });
-        console.log('[VehicleTrack] Внутренний контур отрисован');
+        log.push(`Внутренний контур: ${result.innerPolyline.length} точек`);
     }
 
-    // ── Заливка коридора солидами (зелёный) ────────────────────────────────
+    // Заливка солидами
     const outerPts = result.outerPolyline;
     const innerPts = result.innerPolyline;
     const count = Math.min(outerPts.length, innerPts.length) - 1;
@@ -112,9 +78,9 @@ async function drawCorridor(
             d: toVec3(innerPts[i + 1]),
         });
     }
-    console.log('[VehicleTrack] Заливка коридора отрисована, солидов:', count);
+    log.push(`Заливка: ${count} солидов`);
 
-    // ── Контур ТС (красный прямоугольник) ──────────────────────────────────
+    // ТС прямоугольник
     const cos = Math.cos(alignmentAngle);
     const sin = Math.sin(alignmentAngle);
     const L  = vehicle.totalLength;
@@ -129,42 +95,26 @@ async function drawCorridor(
         ];
     }
 
-    const vehicleVertices: vec3[] = [
-        rotated(-oF,      -W / 2),
-        rotated(L - oF,   -W / 2),
-        rotated(L - oF,    W / 2),
-        rotated(-oF,       W / 2),
+    const vv: vec3[] = [
+        rotated(-oF,    -W / 2),
+        rotated(L - oF, -W / 2),
+        rotated(L - oF,  W / 2),
+        rotated(-oF,     W / 2),
     ];
 
-    // Контур ТС
-    await editor.addPolyline({
-        color: COLOR_RED,
-        vertices: vehicleVertices,
-        width: 0.3,
-        flags: 0x1, // замкнутая
-    });
-
-    // Заливка ТС
-    await editor.addSolid({
-        color: COLOR_RED,
-        a: vehicleVertices[0],
-        b: vehicleVertices[1],
-        c: vehicleVertices[3],
-        d: vehicleVertices[2],
-    });
-
-    // Стрелка направления
+    await editor.addPolyline({ color: COLOR_RED, vertices: vv, width: 0.3, flags: 0x1 });
+    await editor.addSolid({ color: COLOR_RED, a: vv[0], b: vv[1], c: vv[3], d: vv[2] });
     await editor.addLine({
         color: COLOR_RED,
         a: [alignmentStart.x, alignmentStart.y, 0] as vec3,
         b: rotated(L - oF, 0),
     });
+    log.push('ТС отрисовано');
 
-    console.log('[VehicleTrack] ТС отрисовано');
+    return log;
 }
 
 export default {
-    // DEBUG MARKER 12345
 
     'vehicletrack'(ctx: Context): DiagnosticRule<VehicleTrackRule> {
         return {
@@ -182,18 +132,31 @@ export default {
             },
 
             async execute(app, rule, diagnostics, _progress) {
-                console.log('[VehicleTrack] execute запущен');
-                console.log('[VehicleTrack] ctx keys:', Object.keys(ctx as any));
-                console.log('[VehicleTrack] ctx.cadview:', (ctx as any).cadview);
-                console.log('[VehicleTrack] app keys:', Object.keys(app));
-                console.log('[VehicleTrack] app.model:', app.model);
-                console.log('[VehicleTrack] app.model keys:', app?.model ? Object.keys(app.model as any) : 'нет');
-
                 const drawing = app.model as any;
+
+                // Диагностика: что доступно в app
+                const appKeys = Object.keys(app).join(', ');
+                const modelKeys = drawing ? Object.keys(drawing).join(', ') : 'нет';
+                const layoutsKeys = drawing?.layouts ? Object.keys(drawing.layouts).join(', ') : 'нет';
+                const hasEditor = !!drawing?.layouts?.model?.editor;
+
+                diagnostics.set('debug-ctx', [{
+                    message: ctx.tr('app keys: {0}', appKeys),
+                    severity: 2,
+                }]);
+                diagnostics.set('debug-model', [{
+                    message: ctx.tr('model keys: {0}', modelKeys),
+                    severity: 2,
+                }]);
+                diagnostics.set('debug-layouts', [{
+                    message: ctx.tr('layouts keys: {0} | hasEditor: {1}', layoutsKeys, String(hasEditor)),
+                    severity: 2,
+                }]);
+
                 if (!drawing) {
                     diagnostics.set('error', [{
                         message: ctx.tr('Модель не загружена'),
-                        severity: 1,
+                        severity: 0,
                     }]);
                     return;
                 }
@@ -214,9 +177,12 @@ export default {
                     vehicle = VEHICLE_PRESETS[rule.vehiclePreset];
                 }
 
-                // Поиск трасс через filterLayers
+                // Поиск трасс
                 const layers = drawing.filterLayers(rule.filter, true);
-                console.log('[VehicleTrack] layers.size =', layers.size);
+                diagnostics.set('debug-layers', [{
+                    message: ctx.tr('layers.size = {0}', String(layers.size)),
+                    severity: 2,
+                }]);
 
                 if (layers.size === 0) {
                     diagnostics.set('no-alignment', [{
@@ -227,25 +193,27 @@ export default {
                 }
 
                 const layer = [...layers][0];
-                console.log('[VehicleTrack] layer keys:', Object.keys(layer));
-
                 const alignment = parseIfcAlignment(layer);
-                console.log('[VehicleTrack] alignment segments:', alignment.segments.length);
-
                 const calculator = new VehicleTrackCalculator(vehicle);
                 const result = calculator.calculateCorridor(alignment);
-                console.log('[VehicleTrack] corridor outer pts:', result.outerPolyline.length);
 
                 const startSeg = alignment.segments[0];
                 const startPt  = startSeg.start;
                 const endPt    = startSeg.end;
                 const angle    = Math.atan2(endPt.y - startPt.y, endPt.x - startPt.x);
 
+                // Отрисовка с логами в диагностику
+                let drawLog: string[] = [];
                 try {
-                    await drawCorridor(app, ctx, result, vehicle, startPt, angle);
-                } catch (drawErr) {
-                    console.error('[VehicleTrack] Ошибка отрисовки:', drawErr);
+                    drawLog = await drawCorridor(app, result, vehicle, startPt, angle);
+                } catch (e) {
+                    drawLog = [`ОШИБКА: ${e}`];
                 }
+
+                diagnostics.set('debug-draw', [{
+                    message: ctx.tr('Отрисовка: {0}', drawLog.join(' | ')),
+                    severity: 2,
+                }]);
 
                 diagnostics.set('result', [{
                     message: ctx.tr(
@@ -255,7 +223,7 @@ export default {
                         result.outerRadius.toFixed(2),
                         result.innerRadius.toFixed(2),
                     ),
-                    severity: 0,
+                    severity: 4,
                 }]);
             },
         };
@@ -356,5 +324,3 @@ export default {
         };
     },
 };
-
-
