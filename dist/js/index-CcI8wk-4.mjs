@@ -55,13 +55,13 @@ function x(n, e, r) {
 function F(n, e) {
   return Math.atan2(e.y - n.y, e.x - n.x);
 }
-function I(n, e, r, s, o = 32) {
+function I(n, e, r, s, a = 32) {
   const t = [];
   let i = s - r;
   for (; i > Math.PI; ) i -= 2 * Math.PI;
   for (; i < -Math.PI; ) i += 2 * Math.PI;
-  for (let c = 0; c <= o; c++) {
-    const h = r + i * c / o;
+  for (let c = 0; c <= a; c++) {
+    const h = r + i * c / a;
     t.push({
       x: n.x + e * Math.cos(h),
       y: n.y + e * Math.sin(h),
@@ -85,8 +85,8 @@ class z {
    * R_outer = R + (wheelbase/2 + trackWidth/2 + overhangFront)
    */
   outerRadius(e) {
-    const { wheelbase: r, trackWidth: s, overhangFront: o } = this.vehicle;
-    return e + (r / 2 + s / 2 + o);
+    const { wheelbase: r, trackWidth: s, overhangFront: a } = this.vehicle;
+    return e + (r / 2 + s / 2 + a);
   }
   /**
    * Внутренний радиус поворота (AutoTURN формула)
@@ -100,14 +100,14 @@ class z {
    * Расчёт коридора для одного прямого сегмента трассы
    */
   straightSegmentCorridor(e) {
-    const r = F(e.start, e.end), s = this.straightWidth / 2, o = [
+    const r = F(e.start, e.end), s = this.straightWidth / 2, a = [
       x(e.start, r, s),
       x(e.end, r, s)
     ], t = [
       x(e.start, r, -s),
       x(e.end, r, -s)
     ];
-    return { outer: o, inner: t };
+    return { outer: a, inner: t };
   }
   /**
    * Расчёт коридора для дугового сегмента трассы
@@ -115,7 +115,7 @@ class z {
   arcSegmentCorridor(e) {
     if (!e.center || !e.radius)
       throw new Error("Дуговой сегмент должен содержать center и radius");
-    const r = e.radius, s = e.direction === "right", o = this.outerRadius(r), t = this.innerRadius(r), i = F(e.center, e.start), c = F(e.center, e.end), h = s ? o : t, R = s ? t : o, u = I(e.center, h, i, c), g = I(e.center, R, i, c);
+    const r = e.radius, s = e.direction === "right", a = this.outerRadius(r), t = this.innerRadius(r), i = F(e.center, e.start), c = F(e.center, e.end), h = s ? a : t, p = s ? t : a, u = I(e.center, h, i, c), g = I(e.center, p, i, c);
     return { outer: u, inner: g };
   }
   /**
@@ -127,10 +127,10 @@ class z {
       let i, c;
       t.type === "straight" ? { outer: i, inner: c } = this.straightSegmentCorridor(t) : { outer: i, inner: c } = this.arcSegmentCorridor(t), r.length > 0 && (i.shift(), c.shift()), r.push(...i), s.push(...c);
     }
-    const o = this.vehicle.minTurningRadius;
+    const a = this.vehicle.minTurningRadius;
     return {
-      outerRadius: this.outerRadius(o),
-      innerRadius: this.innerRadius(o),
+      outerRadius: this.outerRadius(a),
+      innerRadius: this.innerRadius(a),
       straightWidth: this.straightWidth,
       outerPolyline: r,
       innerPolyline: s
@@ -138,36 +138,36 @@ class z {
   }
 }
 function L(n) {
-  var t, i, c, h, R, u, g;
+  var t, i, c, h, p, u, g;
   const e = [];
   let r = 0;
   const s = ((c = (i = (t = n == null ? void 0 : n.IsDecomposedBy) == null ? void 0 : t[0]) == null ? void 0 : i.RelatedObjects) == null ? void 0 : c.find(
     (d) => (d == null ? void 0 : d.type) === "IfcAlignmentHorizontal"
-  )) ?? n, o = ((R = (h = s == null ? void 0 : s.IsDecomposedBy) == null ? void 0 : h[0]) == null ? void 0 : R.RelatedObjects) ?? [];
-  for (const d of o) {
+  )) ?? n, a = ((p = (h = s == null ? void 0 : s.IsDecomposedBy) == null ? void 0 : h[0]) == null ? void 0 : p.RelatedObjects) ?? [];
+  for (const d of a) {
     const l = d == null ? void 0 : d.DesignParameters;
     if (l && l.type === "IfcAlignmentHorizontalSegment") {
-      const a = { x: ((u = l.StartPoint) == null ? void 0 : u.x) ?? 0, y: ((g = l.StartPoint) == null ? void 0 : g.y) ?? 0, z: 0 }, m = l.SegmentLength ?? 10;
+      const m = { x: ((u = l.StartPoint) == null ? void 0 : u.x) ?? 0, y: ((g = l.StartPoint) == null ? void 0 : g.y) ?? 0, z: 0 }, o = l.SegmentLength ?? 10;
       if (l.PredefinedType === "LINE") {
         const y = l.StartDirection ?? 0, f = {
-          x: a.x + m * Math.cos(y),
-          y: a.y + m * Math.sin(y),
+          x: m.x + o * Math.cos(y),
+          y: m.y + o * Math.sin(y),
           z: 0
         };
-        e.push({ type: "straight", start: a, end: f, length: m });
+        e.push({ type: "straight", start: m, end: f, length: o });
       } else if (l.PredefinedType === "CIRCULARARC") {
-        const y = l.Radius ?? 10, f = l.IsCCW ? "left" : "right", k = l.StartDirection ?? 0, p = f === "left" ? 1 : -1, v = {
-          x: a.x + y * Math.cos(k + p * Math.PI / 2),
-          y: a.y + y * Math.sin(k + p * Math.PI / 2),
+        const y = l.Radius ?? 10, f = l.IsCCW ? "left" : "right", v = l.StartDirection ?? 0, k = f === "left" ? 1 : -1, R = {
+          x: m.x + y * Math.cos(v + k * Math.PI / 2),
+          y: m.y + y * Math.sin(v + k * Math.PI / 2),
           z: 0
-        }, P = m / y, b = k - p * Math.PI / 2 + p * P, W = {
-          x: v.x + y * Math.cos(b),
-          y: v.y + y * Math.sin(b),
+        }, P = o / y, b = v - k * Math.PI / 2 + k * P, W = {
+          x: R.x + y * Math.cos(b),
+          y: R.y + y * Math.sin(b),
           z: 0
         };
-        e.push({ type: "arc", start: a, end: W, length: m, radius: y, direction: f, center: v });
+        e.push({ type: "arc", start: m, end: W, length: o, radius: y, direction: f, center: R });
       }
-      r += m;
+      r += o;
     }
   }
   return e.length === 0 && (e.push(
@@ -184,14 +184,14 @@ function L(n) {
     { type: "straight", start: { x: 40, y: 10, z: 0 }, end: { x: 40, y: 40, z: 0 }, length: 30 }
   ), r = 75.7), { ifcId: (n == null ? void 0 : n.GlobalId) ?? "demo", segments: e, totalLength: r };
 }
-async function S(n, e, r, s, o) {
-  var h, R, u, g, d, l;
+async function S(n, e, r, s, a) {
+  var h, p, u, g, d, l, m;
   const t = [];
   let i = null;
   try {
-    i = (g = (u = (R = (h = n == null ? void 0 : n.model) == null ? void 0 : h.layouts) == null ? void 0 : R.model) == null ? void 0 : u.editor) == null ? void 0 : g.call(u), i ? t.push("editor: OK через app.model") : t.push("editor: null через app.model");
-  } catch (a) {
-    t.push(`editor error: ${a}`);
+    i = (g = (u = (p = (h = n == null ? void 0 : n.model) == null ? void 0 : h.layouts) == null ? void 0 : p.model) == null ? void 0 : u.editor) == null ? void 0 : g.call(u), i ? t.push("editor: OK через app.model") : t.push("editor: null через app.model");
+  } catch (o) {
+    t.push(`editor error: ${o}`);
   }
   if (!i)
     return t.push("Доступные ключи app.model: " + Object.keys((n == null ? void 0 : n.model) ?? {}).join(", ")), t;
@@ -199,16 +199,28 @@ async function S(n, e, r, s, o) {
   const c = (l = (d = n == null ? void 0 : n.model) == null ? void 0 : d.layouts) == null ? void 0 : l.model;
   t.push("layout.model keys: " + Object.keys(c ?? {}).join(", "));
   try {
-    const a = i.layout;
-    t.push("editor.layout keys: " + Object.keys(a ?? {}).join(", "));
-  } catch (a) {
-    t.push("editor.layout error: " + a);
+    const o = i.layout;
+    t.push("editor.layout keys: " + Object.keys(o ?? {}).join(", "));
+  } catch (o) {
+    t.push("editor.layout error: " + o);
   }
   try {
-    const a = i.updates;
-    t.push("editor.updates type: " + typeof a + " | isArray: " + Array.isArray(a)), a && typeof a == "object" && t.push("editor.updates keys: " + Object.keys(a).join(", "));
-  } catch (a) {
-    t.push("editor.updates error: " + a);
+    const o = i.updates;
+    t.push("editor.updates type: " + typeof o + " | isArray: " + Array.isArray(o)), o && typeof o == "object" && t.push("editor.updates keys: " + Object.keys(o).join(", "));
+  } catch (o) {
+    t.push("editor.updates error: " + o);
+  }
+  try {
+    const o = (m = i.layout) == null ? void 0 : m.$data;
+    t.push("layout.$data type: " + typeof o), o && typeof o == "object" && t.push("layout.$data keys: " + Object.keys(o).join(", "));
+  } catch (o) {
+    t.push("layout.$data error: " + o);
+  }
+  try {
+    const o = Object.getPrototypeOf(i);
+    t.push("editor proto methods: " + Object.getOwnPropertyNames(o).join(", "));
+  } catch (o) {
+    t.push("editor proto error: " + o);
   }
   return t;
 }
@@ -226,9 +238,9 @@ const T = {
           customTurningRadius: 9
         };
       },
-      async execute(e, r, s, o) {
+      async execute(e, r, s, a) {
         var P, b;
-        const t = e.model, i = Object.keys(e).join(", "), c = t ? Object.keys(t).join(", ") : "нет", h = t != null && t.layouts ? Object.keys(t.layouts).join(", ") : "нет", R = !!((b = (P = t == null ? void 0 : t.layouts) == null ? void 0 : P.model) != null && b.editor);
+        const t = e.model, i = Object.keys(e).join(", "), c = t ? Object.keys(t).join(", ") : "нет", h = t != null && t.layouts ? Object.keys(t.layouts).join(", ") : "нет", p = !!((b = (P = t == null ? void 0 : t.layouts) == null ? void 0 : P.model) != null && b.editor);
         if (s.set("debug-ctx", [{
           message: n.tr("app keys: {0}", i),
           severity: 2
@@ -236,7 +248,7 @@ const T = {
           message: n.tr("model keys: {0}", c),
           severity: 2
         }]), s.set("debug-layouts", [{
-          message: n.tr("layouts keys: {0} | hasEditor: {1}", h, String(R)),
+          message: n.tr("layouts keys: {0} | hasEditor: {1}", h, String(p)),
           severity: 2
         }]), !t) {
           s.set("error", [{
@@ -266,23 +278,23 @@ const T = {
           }]);
           return;
         }
-        const d = [...g][0], l = L(d), m = new z(u).calculateCorridor(l), y = l.segments[0], f = y.start, k = y.end, p = Math.atan2(k.y - f.y, k.x - f.x);
-        let v = [];
+        const d = [...g][0], l = L(d), o = new z(u).calculateCorridor(l), y = l.segments[0], f = y.start, v = y.end, k = Math.atan2(v.y - f.y, v.x - f.x);
+        let R = [];
         try {
-          v = await S(e, m, u, f, p);
+          R = await S(e, o, u, f, k);
         } catch (W) {
-          v = [`ОШИБКА: ${W}`];
+          R = [`ОШИБКА: ${W}`];
         }
         s.set("debug-draw", [{
-          message: n.tr("Отрисовка: {0}", v.join(" | ")),
+          message: n.tr("Отрисовка: {0}", R.join(" | ")),
           severity: 2
         }]), s.set("result", [{
           message: n.tr(
             "Коридор построен. ТС: {0}. Ширина: {1} м. R внешний: {2} м. R внутренний: {3} м.",
             u.name,
-            m.straightWidth.toFixed(2),
-            m.outerRadius.toFixed(2),
-            m.innerRadius.toFixed(2)
+            o.straightWidth.toFixed(2),
+            o.outerRadius.toFixed(2),
+            o.innerRadius.toFixed(2)
           ),
           severity: 4
         }]);
@@ -298,8 +310,8 @@ const T = {
           description: n.description,
           group: n.group,
           value() {
-            var o;
-            const r = (o = e[0]) == null ? void 0 : o.vehiclePreset, s = r !== "custom" ? M[r] : null;
+            var a;
+            const r = (a = e[0]) == null ? void 0 : a.vehiclePreset, s = r !== "custom" ? M[r] : null;
             return { label: (s == null ? void 0 : s.name) ?? "Пользовательский" };
           },
           editor() {
@@ -317,11 +329,11 @@ const T = {
                 ], s = await n.showQuickPick(r, {
                   placeHolder: "Выберите тип транспортного средства"
                 });
-                for (const o of e)
+                for (const a of e)
                   try {
-                    if (o.vehiclePreset = s.key, s.key !== "custom") {
+                    if (a.vehiclePreset = s.key, s.key !== "custom") {
                       const t = M[s.key];
-                      o.customWheelbase = t.wheelbase, o.customTrackWidth = t.trackWidth, o.customOverhangFront = t.overhangFront, o.customOverhangRear = t.overhangRear, o.customTurningRadius = t.minTurningRadius;
+                      a.customWheelbase = t.wheelbase, a.customTrackWidth = t.trackWidth, a.customOverhangFront = t.overhangFront, a.customOverhangRear = t.overhangRear, a.customTurningRadius = t.minTurningRadius;
                     }
                   } catch (t) {
                     console.error(t);
@@ -345,8 +357,8 @@ const T = {
           description: n.description,
           group: n.group,
           value() {
-            var o;
-            const s = (o = e[0]) == null ? void 0 : o[r];
+            var a;
+            const s = (a = e[0]) == null ? void 0 : a[r];
             for (let t = 1; t < e.length; t++)
               if (e[t][r] !== s)
                 return { label: "**Различные**", suffix: "м" };
@@ -357,11 +369,11 @@ const T = {
               type: "editbox",
               commit(s) {
                 if (!s) return;
-                const o = parseFloat(s);
-                if (!(!isFinite(o) || o <= 0))
+                const a = parseFloat(s);
+                if (!(!isFinite(a) || a <= 0))
                   for (const t of e)
                     try {
-                      t[r] = o;
+                      t[r] = a;
                     } catch (i) {
                       console.error(i);
                     }

@@ -61,7 +61,22 @@ async function drawCorridor(
         }
     } catch(e) { log.push('editor.updates error: ' + e); }
 
-    return log; // Пока не рисуем, только исследуем
+    // Исследуем editor.layout.
+    try {
+        const layoutData = editor.layout?.$data;
+        log.push('layout.$data type: ' + typeof layoutData);
+        if (layoutData && typeof layoutData === 'object') {
+            log.push('layout.$data keys: ' + Object.keys(layoutData).join(', '));
+        }
+    } catch(e) { log.push('layout.$data error: ' + e); }
+
+    // Исследуем прототип editor — там могут быть методы
+    try {
+        const proto = Object.getPrototypeOf(editor);
+        log.push('editor proto methods: ' + Object.getOwnPropertyNames(proto).join(', '));
+    } catch(e) { log.push('editor proto error: ' + e); }
+
+    return log;
 
     // Коридор внешний контур
     if (result.outerPolyline.length > 1) {
