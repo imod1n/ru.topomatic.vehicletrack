@@ -111,6 +111,22 @@ async function drawCorridor(
     });
     log.push('ТС отрисовано');
 
+    // Применяем изменения — сохраняем транзакцию редактора
+    try {
+        await editor.commit?.();
+        log.push('commit: OK');
+    } catch (e) {
+        log.push(`commit: ${e}`);
+    }
+
+    // Пробуем обновить вид
+    try {
+        app?.model?.layouts?.model?.update?.();
+        log.push('update: OK');
+    } catch (e) {
+        log.push(`update: ${e}`);
+    }
+
     return log;
 }
 
