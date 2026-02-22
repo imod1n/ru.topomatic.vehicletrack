@@ -3,7 +3,7 @@
     "name":  "ru.topomatic.vehicletrack",
     "displayName":  "Коридор движения ТС",
     "description":  "Расчёт траекторий движения транспортных средств и коридоров движения (аналог AutoTURN)",
-    "version":  "1.0.0",
+    "version":  "1.0.1",
     "main":  "dist/js/index-BRGaNwf6.mjs",
     "scripts":  {
                     "serve":  "albatros-cli serve",
