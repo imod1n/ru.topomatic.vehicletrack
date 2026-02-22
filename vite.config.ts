@@ -18,6 +18,8 @@ export default defineConfig({
       external: ['albatros/enums', 'albatros'],
       output: {
         exports: 'named',
+        entryFileNames: 'index.mjs',
+        chunkFileNames: 'chunk.mjs',
       },
     },
     sourcemap: false,
