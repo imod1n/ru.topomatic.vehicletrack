@@ -178,7 +178,7 @@ export default {
                     customTrackWidth: 2.5,
                     customOverhangFront: 1.2,
                     customOverhangRear: 1.5,
-                    customTurningRadius: 9.0,  
+                    customTurningRadius: 9.0,
                 };
             },
 
