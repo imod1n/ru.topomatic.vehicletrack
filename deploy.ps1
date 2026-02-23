@@ -1,31 +1,31 @@
-# Шаг 1: возвращаем main на исходник
-$rootPkg = Get-Content package.json -Raw | ConvertFrom-Json
-$rootPkg.main = "src/index.ts"
+# Убеждаемся что main = src/index.ts
+$pkg = Get-Content package.json | ConvertFrom-Json
+$pkg.main = "src/index.ts"
+$pkg | ConvertTo-Json -Depth 10 | Set-Content package.json
 
-# Автоинкремент patch версии (1.0.0 -> 1.0.1 -> 1.0.2)
-$ver = [System.Version]$rootPkg.version
-$newVer = "$($ver.Major).$($ver.Minor).$($ver.Build + 1)"
-$rootPkg.version = $newVer
-$rootPkg | ConvertTo-Json -Depth 10 | Set-Content package.json
-Write-Host "Версия: $newVer"
-
-# Шаг 2: удаляем старые файлы
-Remove-Item dist\js\*.mjs -ErrorAction SilentlyContinue
-Remove-Item dist\js\*.map -ErrorAction SilentlyContinue
-
-# Шаг 3: собираем
+# Собираем
 npx albatros-cli build
-if ($LASTEXITCODE -ne 0) { Write-Host "Ошибка сборки!"; exit 1 }
+if ($LASTEXITCODE -ne 0) { Write-Host "ОШИБКА СБОРКИ"; exit 1 }
 
-# Шаг 4: обновляем main
-$distPkg = Get-Content dist\package.json | ConvertFrom-Json
-$newMain = "dist/" + $distPkg.main
-$rootPkg = Get-Content package.json -Raw | ConvertFrom-Json
-$rootPkg.main = $newMain
-$rootPkg | ConvertTo-Json -Depth 10 | Set-Content package.json
-Write-Host "main: $newMain"
+# Читаем что albatros записал в dist/package.json
+$distMain = (Get-Content dist\package.json | ConvertFrom-Json).main
+Write-Host "albatros собрал: $distMain"
 
-# Шаг 5: пушим
+# Записываем правильный путь в корневой package.json
+$pkg = Get-Content package.json | ConvertFrom-Json
+$pkg.main = "dist/" + $distMain
+$pkg | ConvertTo-Json -Depth 10 | Set-Content package.json
+Write-Host "Итоговый main: dist/$distMain"
+
+# Деплоим
 git add .
-git commit -m "Deploy $newVer`: $newMain"
+git commit -m "Deploy: dist/$distMain"
+git push
+
+# Возвращаем main обратно на src/index.ts для следующей сборки
+$pkg = Get-Content package.json | ConvertFrom-Json
+$pkg.main = "src/index.ts"
+$pkg | ConvertTo-Json -Depth 10 | Set-Content package.json
+git add package.json
+git commit -m "Reset main to src/index.ts"
 git push
