@@ -7,7 +7,7 @@
     "main": "src/index.ts",
     "scripts": {
         "serve": "albatros-cli serve",
-        "build": "albatros-cli build"
+        "build": "albatros-cli build" 
     },
     "keywords": [
         "category::rule"
