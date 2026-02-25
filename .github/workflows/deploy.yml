@@ -1,4 +1,4 @@
-name: Deploy Plugin to GitHub Pages
+name: Deploy Jekyll with GitHub Pages dependencies preinstalled
 
 on:
   push:
@@ -20,22 +20,27 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install Node
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Copy site
+        run: |
+          mkdir site
+          cp ./README.md ./site/README.md
+          cp ./_config.yml ./site/_config.yml
+      - name: Build with Jekyll
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./site
+          destination: ./jekyll
+      - name: Install node
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Fix permissions
-        run: chmod +x node_modules/.bin/albatros-cli
-
-      - name: Build
-        run: npm run build
-
-      - name: Upload Artifact
+      - run: npm install
+      - run: chmod +x node_modules/.bin/albatros-cli
+      - run: npm run build
+      - run: cp -a ./jekyll/. ./dist/
+      - name: Upload Artifact Site
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
@@ -47,6 +52,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
+      - name: Deploy Site to GitHub Pages
+        id: deployment-site
         uses: actions/deploy-pages@v4
