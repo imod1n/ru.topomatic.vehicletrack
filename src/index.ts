@@ -28,139 +28,65 @@ async function drawCorridor(
 ): Promise<string[]> {
     const log: string[] = [];
 
-    // Получаем editor через app.model
-    let editor: any = null;
-    try {
-        editor = app?.model?.layouts?.model?.editor?.();
-        if (editor) log.push('editor: OK через app.model');
-        else log.push('editor: null через app.model');
-    } catch (e) {
-        log.push(`editor error: ${e}`);
-    }
-
+    const editor: any = app?.model?.layouts?.model?.editor?.();
     if (!editor) {
-        log.push('Доступные ключи app.model: ' + Object.keys(app?.model ?? {}).join(', '));
+        log.push('editor: не найден');
         return log;
     }
+    log.push('editor: OK');
 
-    // Логируем методы editor и layout
-    log.push('editor keys: ' + Object.keys(editor).join(', '));
-    const layoutModel = app?.model?.layouts?.model;
-    log.push('layout.model keys: ' + Object.keys(layoutModel ?? {}).join(', '));
+    // ── Зондируем addEntity ──────────────────────────────────────────────────
+    // Пробуем разные форматы, чтобы понять какой принимает API
 
-    // Исследуем editor.layout и editor.updates
     try {
-        const editorLayout = editor.layout;
-        log.push('editor.layout keys: ' + Object.keys(editorLayout ?? {}).join(', '));
-    } catch(e) { log.push('editor.layout error: ' + e); }
-    try {
-        const editorUpdates = editor.updates;
-        log.push('editor.updates type: ' + typeof editorUpdates + ' | isArray: ' + Array.isArray(editorUpdates));
-        if (editorUpdates && typeof editorUpdates === 'object') {
-            log.push('editor.updates keys: ' + Object.keys(editorUpdates).join(', '));
-        }
-    } catch(e) { log.push('editor.updates error: ' + e); }
+        await editor.beginEdit?.();
+        log.push('beginEdit: OK');
+    } catch(e) { log.push(`beginEdit error: ${e}`); }
 
-    // Исследуем editor.layout.
-    try {
-        const layoutData = editor.layout?.$data;
-        log.push('layout.$data type: ' + typeof layoutData);
-        if (layoutData && typeof layoutData === 'object') {
-            log.push('layout.$data keys: ' + Object.keys(layoutData).join(', '));
-        }
-    } catch(e) { log.push('layout.$data error: ' + e); }
-
-    // Исследуем прототип editor — там могут быть методы
-    try {
-        const proto = Object.getPrototypeOf(editor);
-        log.push('editor proto methods: ' + Object.getOwnPropertyNames(proto).join(', '));
-    } catch(e) { log.push('editor proto error: ' + e); }
-
-    return log;
-
-    // Коридор внешний контур
-    if (result.outerPolyline.length > 1) {
-        await editor.addPolyline({
-            color: COLOR_GREEN,
-            vertices: result.outerPolyline.map(toVec3),
-            width: 0.5,
-            flags: 0x0,
-        });
-        log.push(`Внешний контур: ${result.outerPolyline.length} точек`);
-    }
-
-    // Коридор внутренний контур
-    if (result.innerPolyline.length > 1) {
-        await editor.addPolyline({
-            color: COLOR_GREEN,
-            vertices: result.innerPolyline.map(toVec3),
-            width: 0.5,
-            flags: 0x0,
-        });
-        log.push(`Внутренний контур: ${result.innerPolyline.length} точек`);
-    }
-
-    // Заливка солидами
-    const outerPts = result.outerPolyline;
-    const innerPts = result.innerPolyline;
-    const count = Math.min(outerPts.length, innerPts.length) - 1;
-    for (let i = 0; i < count; i++) {
-        await editor.addSolid({
-            color: COLOR_GREEN,
-            a: toVec3(outerPts[i]),
-            b: toVec3(outerPts[i + 1]),
-            c: toVec3(innerPts[i]),
-            d: toVec3(innerPts[i + 1]),
-        });
-    }
-    log.push(`Заливка: ${count} солидов`);
-
-    // ТС прямоугольник
-    const cos = Math.cos(alignmentAngle);
-    const sin = Math.sin(alignmentAngle);
-    const L  = vehicle.totalLength;
-    const W  = vehicle.trackWidth;
-    const oF = vehicle.overhangFront;
-
-    function rotated(dx: number, dy: number): vec3 {
-        return [
-            alignmentStart.x + dx * cos - dy * sin,
-            alignmentStart.y + dx * sin + dy * cos,
-            0,
-        ];
-    }
-
-    const vv: vec3[] = [
-        rotated(-oF,    -W / 2),
-        rotated(L - oF, -W / 2),
-        rotated(L - oF,  W / 2),
-        rotated(-oF,     W / 2),
-    ];
-
-    await editor.addPolyline({ color: COLOR_RED, vertices: vv, width: 0.3, flags: 0x1 });
-    await editor.addSolid({ color: COLOR_RED, a: vv[0], b: vv[1], c: vv[3], d: vv[2] });
-    await editor.addLine({
+    // Тестовая линия — пробуем несколько вероятных форматов
+    const testLine_v1 = {
+        type: 'line',
         color: COLOR_RED,
-        a: [alignmentStart.x, alignmentStart.y, 0] as vec3,
-        b: rotated(L - oF, 0),
-    });
-    log.push('ТС отрисовано');
+        a: [0, 0, 0] as vec3,
+        b: [10, 0, 0] as vec3,
+    };
+    const testLine_v2 = {
+        type: 'AcDbLine',
+        color: COLOR_RED,
+        startPoint: [0, 0, 0],
+        endPoint: [10, 0, 0],
+    };
+    const testLine_v3 = {
+        type: 2, // числовой тип — LINE в DWG/DXF
+        color: COLOR_RED,
+        points: [[0, 0, 0], [10, 0, 0]],
+    };
+    const testLine_v4 = {
+        entityType: 'line',
+        color: COLOR_RED,
+        start: { x: 0, y: 0, z: 0 },
+        end: { x: 10, y: 0, z: 0 },
+    };
 
-    // Применяем изменения — сохраняем транзакцию редактора
-    try {
-        await editor.commit?.();
-        log.push('commit: OK');
-    } catch (e) {
-        log.push(`commit: ${e}`);
+    for (const [name, entity] of [
+        ['v1 (type:line, a/b)', testLine_v1],
+        ['v2 (AcDbLine, startPoint/endPoint)', testLine_v2],
+        ['v3 (type:2, points)', testLine_v3],
+        ['v4 (entityType:line, start/end)', testLine_v4],
+    ] as [string, object][]) {
+        try {
+            const r = await editor.addEntity(entity);
+            log.push(`addEntity ${name}: OK → result: ${JSON.stringify(r)}`);
+            break; // нашли рабочий формат — дальше не пробуем
+        } catch(e) {
+            log.push(`addEntity ${name}: FAIL → ${e}`);
+        }
     }
 
-    // Пробуем обновить вид
     try {
-        app?.model?.layouts?.model?.update?.();
-        log.push('update: OK');
-    } catch (e) {
-        log.push(`update: ${e}`);
-    }
+        await editor.endEdit?.();
+        log.push('endEdit: OK');
+    } catch(e) { log.push(`endEdit error: ${e}`); }
 
     return log;
 }
@@ -184,25 +110,6 @@ export default {
 
             async execute(app, rule, diagnostics, _progress) {
                 const drawing = app.model as any;
-
-                // Диагностика: что доступно в app
-                const appKeys = Object.keys(app).join(', ');
-                const modelKeys = drawing ? Object.keys(drawing).join(', ') : 'нет';
-                const layoutsKeys = drawing?.layouts ? Object.keys(drawing.layouts).join(', ') : 'нет';
-                const hasEditor = !!drawing?.layouts?.model?.editor;
-
-                diagnostics.set('debug-ctx', [{
-                    message: ctx.tr('app keys: {0}', appKeys),
-                    severity: 2,
-                }]);
-                diagnostics.set('debug-model', [{
-                    message: ctx.tr('model keys: {0}', modelKeys),
-                    severity: 2,
-                }]);
-                diagnostics.set('debug-layouts', [{
-                    message: ctx.tr('layouts keys: {0} | hasEditor: {1}', layoutsKeys, String(hasEditor)),
-                    severity: 2,
-                }]);
 
                 if (!drawing) {
                     diagnostics.set('error', [{
