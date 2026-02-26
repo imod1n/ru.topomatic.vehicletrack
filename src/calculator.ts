@@ -84,19 +84,29 @@ function bearing(a: Point3D, b: Point3D): number {
 
 /**
  * Точки на дуге (N шагов)
+ * @param ccw true = против часовой (поворот влево), false = по часовой (вправо)
  */
 function arcPoints(
   center: Point3D,
   radius: number,
   startAngle: number,
   endAngle: number,
+  ccw: boolean,
   steps: number = 32,
 ): Point3D[] {
   const pts: Point3D[] = [];
-  // Нормализация: убедиться, что идём в нужном направлении
+
+  // Нормализуем delta строго в нужном направлении
   let delta = endAngle - startAngle;
-  while (delta > Math.PI) delta -= 2 * Math.PI;
-  while (delta < -Math.PI) delta += 2 * Math.PI;
+  if (ccw) {
+    // Должны идти в сторону увеличения угла
+    while (delta <= 0) delta += 2 * Math.PI;
+    while (delta > 2 * Math.PI) delta -= 2 * Math.PI;
+  } else {
+    // Должны идти в сторону уменьшения угла
+    while (delta >= 0) delta -= 2 * Math.PI;
+    while (delta < -2 * Math.PI) delta += 2 * Math.PI;
+  }
 
   for (let i = 0; i <= steps; i++) {
     const angle = startAngle + (delta * i) / steps;
@@ -170,21 +180,18 @@ export class VehicleTrackCalculator {
     }
 
     const R = seg.radius;
-    const isRight = seg.direction === 'right';
-
-    // При повороте вправо: внешний контур — левый (дальний от центра)
-    // При повороте влево: внешний контур — правый
+    const isLeft = seg.direction === 'left';  // поворот влево = CCW
     const Ro = this.outerRadius(R);
     const Ri = this.innerRadius(R);
 
     const startAngle = bearing(seg.center, seg.start);
-    const endAngle = bearing(seg.center, seg.end);
+    const endAngle   = bearing(seg.center, seg.end);
 
-    const outerRadius = isRight ? Ro : Ri;
-    const innerRadius = isRight ? Ri : Ro;
-
-    const outer = arcPoints(seg.center, outerRadius, startAngle, endAngle);
-    const inner = arcPoints(seg.center, innerRadius, startAngle, endAngle);
+    // Внешний контур — всегда дальше от центра поворота (Ro)
+    // Внутренний контур — всегда ближе к центру (Ri)
+    // Направление обхода: влево = CCW, вправо = CW
+    const outer = arcPoints(seg.center, Ro, startAngle, endAngle, isLeft);
+    const inner = arcPoints(seg.center, Ri, startAngle, endAngle, isLeft);
 
     return { outer, inner };
   }
