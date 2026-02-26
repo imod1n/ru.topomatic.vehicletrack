@@ -19,6 +19,112 @@ function toVec3(p: Point3D): vec3 {
     return [p.x, p.y, 0];
 }
 
+/** Добавляет линию через addEntity (формат v1 — проверен) */
+async function addLine(editor: any, color: number, a: vec3, b: vec3): Promise<void> {
+    await editor.addEntity({ type: 'line', color, a, b });
+}
+
+/**
+ * Добавляет полилинию.
+ * Пробует 'polyline' → 'lwpolyline' → fallback через отдельные линии.
+ */
+async function addPolyline(
+    editor: any,
+    color: number,
+    vertices: vec3[],
+    closed: boolean = false,
+    log: string[] = [],
+): Promise<void> {
+    if (vertices.length < 2) return;
+
+    // Попытка 1: type:'polyline'
+    try {
+        await editor.addEntity({ type: 'polyline', color, vertices, closed });
+        log.push('polyline: OK (type:polyline)');
+        return;
+    } catch (_) { /* пробуем дальше */ }
+
+    // Попытка 2: type:'lwpolyline'
+    try {
+        await editor.addEntity({ type: 'lwpolyline', color, vertices, closed });
+        log.push('polyline: OK (type:lwpolyline)');
+        return;
+    } catch (_) { /* пробуем дальше */ }
+
+    // Попытка 3: type:'spline' с points
+    try {
+        await editor.addEntity({ type: 'spline', color, points: vertices });
+        log.push('polyline: OK (type:spline)');
+        return;
+    } catch (_) { /* пробуем дальше */ }
+
+    // Fallback: рисуем как набор линий
+    for (let i = 0; i < vertices.length - 1; i++) {
+        await addLine(editor, color, vertices[i], vertices[i + 1]);
+    }
+    if (closed && vertices.length > 2) {
+        await addLine(editor, color, vertices[vertices.length - 1], vertices[0]);
+    }
+    log.push(`polyline: fallback (${vertices.length - 1} lines)`);
+}
+
+/**
+ * Добавляет заливку между двумя контурами.
+ * Пробует 'solid' → 'hatch' → пропускает.
+ */
+async function addFill(
+    editor: any,
+    color: number,
+    outer: Point3D[],
+    inner: Point3D[],
+    log: string[] = [],
+): Promise<void> {
+    const count = Math.min(outer.length, inner.length) - 1;
+    if (count <= 0) return;
+
+    // Пробуем solid на первом сегменте — если сработает, рисуем все
+    let solidWorked = false;
+    try {
+        await editor.addEntity({
+            type: 'solid',
+            color,
+            a: toVec3(outer[0]),
+            b: toVec3(outer[1]),
+            c: toVec3(inner[0]),
+            d: toVec3(inner[1]),
+        });
+        solidWorked = true;
+    } catch (_) { /* пробуем hatch */ }
+
+    if (solidWorked) {
+        for (let i = 1; i < count; i++) {
+            await editor.addEntity({
+                type: 'solid',
+                color,
+                a: toVec3(outer[i]),
+                b: toVec3(outer[i + 1]),
+                c: toVec3(inner[i]),
+                d: toVec3(inner[i + 1]),
+            });
+        }
+        log.push(`fill: OK (${count} solids)`);
+        return;
+    }
+
+    // Пробуем hatch с boundary
+    try {
+        const boundary = [
+            ...outer.map(toVec3),
+            ...[...inner].reverse().map(toVec3),
+        ];
+        await editor.addEntity({ type: 'hatch', color, boundary, patternName: 'SOLID' });
+        log.push('fill: OK (hatch)');
+        return;
+    } catch (_) { /* игнорируем */ }
+
+    log.push('fill: skipped (no solid/hatch support)');
+}
+
 async function drawCorridor(
     app: any,
     result: CorridorResult,
@@ -29,64 +135,66 @@ async function drawCorridor(
     const log: string[] = [];
 
     const editor: any = app?.model?.layouts?.model?.editor?.();
-    if (!editor) {
-        log.push('editor: не найден');
-        return log;
-    }
-    log.push('editor: OK');
+    if (!editor) { log.push('editor: не найден'); return log; }
 
-    // ── Зондируем addEntity ──────────────────────────────────────────────────
-    // Пробуем разные форматы, чтобы понять какой принимает API
+    try { await editor.beginEdit?.(); } catch(e) { log.push(`beginEdit error: ${e}`); return log; }
 
-    try {
-        await editor.beginEdit?.();
-        log.push('beginEdit: OK');
-    } catch(e) { log.push(`beginEdit error: ${e}`); }
-
-    // Тестовая линия — пробуем несколько вероятных форматов
-    const testLine_v1 = {
-        type: 'line',
-        color: COLOR_RED,
-        a: [0, 0, 0] as vec3,
-        b: [10, 0, 0] as vec3,
-    };
-    const testLine_v2 = {
-        type: 'AcDbLine',
-        color: COLOR_RED,
-        startPoint: [0, 0, 0],
-        endPoint: [10, 0, 0],
-    };
-    const testLine_v3 = {
-        type: 2, // числовой тип — LINE в DWG/DXF
-        color: COLOR_RED,
-        points: [[0, 0, 0], [10, 0, 0]],
-    };
-    const testLine_v4 = {
-        entityType: 'line',
-        color: COLOR_RED,
-        start: { x: 0, y: 0, z: 0 },
-        end: { x: 10, y: 0, z: 0 },
-    };
-
-    for (const [name, entity] of [
-        ['v1 (type:line, a/b)', testLine_v1],
-        ['v2 (AcDbLine, startPoint/endPoint)', testLine_v2],
-        ['v3 (type:2, points)', testLine_v3],
-        ['v4 (entityType:line, start/end)', testLine_v4],
-    ] as [string, object][]) {
-        try {
-            const r = await editor.addEntity(entity);
-            log.push(`addEntity ${name}: OK → result: ${JSON.stringify(r)}`);
-            break; // нашли рабочий формат — дальше не пробуем
-        } catch(e) {
-            log.push(`addEntity ${name}: FAIL → ${e}`);
-        }
+    // ── Внешний контур ─────────────────────────────────────────────────────
+    if (result.outerPolyline.length > 1) {
+        await addPolyline(editor, COLOR_GREEN, result.outerPolyline.map(toVec3), false, log);
+        log.push(`outer: ${result.outerPolyline.length} pts`);
     }
 
+    // ── Внутренний контур ──────────────────────────────────────────────────
+    if (result.innerPolyline.length > 1) {
+        await addPolyline(editor, COLOR_GREEN, result.innerPolyline.map(toVec3), false, log);
+        log.push(`inner: ${result.innerPolyline.length} pts`);
+    }
+
+    // ── Заливка коридора ───────────────────────────────────────────────────
+    await addFill(editor, COLOR_GREEN, result.outerPolyline, result.innerPolyline, log);
+
+    // ── Прямоугольник ТС ───────────────────────────────────────────────────
+    const cos = Math.cos(alignmentAngle);
+    const sin = Math.sin(alignmentAngle);
+    const L  = vehicle.totalLength;
+    const W  = vehicle.trackWidth;
+    const oF = vehicle.overhangFront;
+
+    function rotated(dx: number, dy: number): vec3 {
+        return [
+            alignmentStart.x + dx * cos - dy * sin,
+            alignmentStart.y + dx * sin + dy * cos,
+            0,
+        ];
+    }
+
+    const vv: vec3[] = [
+        rotated(-oF,    -W / 2),
+        rotated(L - oF, -W / 2),
+        rotated(L - oF,  W / 2),
+        rotated(-oF,     W / 2),
+    ];
+
+    // Контур ТС (замкнутая полилиния)
+    await addPolyline(editor, COLOR_RED, [...vv, vv[0]], false, log);
+
+    // Центральная ось ТС
+    await addLine(editor, COLOR_RED,
+        [alignmentStart.x, alignmentStart.y, 0],
+        rotated(L - oF, 0),
+    );
+
+    // Заливка ТС
     try {
-        await editor.endEdit?.();
-        log.push('endEdit: OK');
-    } catch(e) { log.push(`endEdit error: ${e}`); }
+        await editor.addEntity({ type: 'solid', color: COLOR_RED, a: vv[0], b: vv[1], c: vv[3], d: vv[2] });
+        log.push('vehicle solid: OK');
+    } catch(_) { log.push('vehicle solid: skipped'); }
+
+    log.push('ТС отрисовано');
+
+    try { await editor.endEdit?.(); log.push('endEdit: OK'); }
+    catch(e) { log.push(`endEdit error: ${e}`); }
 
     return log;
 }
@@ -160,7 +268,6 @@ export default {
                 const endPt    = startSeg.end;
                 const angle    = Math.atan2(endPt.y - startPt.y, endPt.x - startPt.x);
 
-                // Отрисовка с логами в диагностику
                 let drawLog: string[] = [];
                 try {
                     drawLog = await drawCorridor(app, result, vehicle, startPt, angle);
