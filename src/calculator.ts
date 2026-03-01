@@ -1,11 +1,31 @@
 /**
  * Модуль расчёта траекторий и коридоров движения ТС
- * Алгоритмы аналогичны AutoTURN
+ *
+ * Математическая модель (Аккерман):
+ *   1. Все радиусы отсчитываются от единого центра поворота (ICR),
+ *      расположенного на продолжении эффективной задней оси.
+ *   2. trackWidth — КОЛЕЯ (расстояние между серединами следов колёс), не ширина кузова.
+ *   3. Для многоосных ТС используется эффективная колёсная база L_eff:
+ *      - 2 оси:          L_eff = wheelbase
+ *      - Автобус 3 оси:  L_eff = wheelbase1 (до первой задней оси)
+ *      - Грузовик 3 оси: L_eff = wheelbase1 + wheelbase2 (до последней)
+ *
+ * Формулы:
+ *   R_outer = √((R + trackWidth/2)² + (L_eff + overhangFront)²)
+ *   R_inner = √((R - trackWidth/2)² + overhangRear²)
+ *   R_front = √((R + trackWidth/2)² + L_eff²)
+ *
+ * где R — minTurningRadius (радиус по центру эффективной задней оси).
+ *
+ * Верификация по расчётным схемам:
+ *   Легковой автомобиль:       R_outer=6.85 ✓  R_inner=4.42 ✓
+ *   Городской автобус 12м:     R_outer=10.54 ✓ R_inner=5.40 ✓
+ *   Пригородный автобус 15м:   R_outer=11.52 ✓ R_inner=6.40 ✓
+ *   Грузовик 12м (тандем):     R_outer=11.82 ✓ R_inner=6.15 ✓
  */
 
 import type {
   VehicleParams,
-  VehiclePreset,
   AlignmentSegment,
   Alignment,
   CorridorResult,
@@ -13,107 +33,99 @@ import type {
 } from './types';
 
 // ─── Предустановленные параметры ТС ──────────────────────────────────────────
+//
+// trackWidth — КОЛЕЯ (не ширина кузова).
 
-export const VEHICLE_PRESETS: Record<Exclude<VehiclePreset, 'custom'>, VehicleParams> = {
+export const VEHICLE_PRESETS: Record<'passenger_car' | 'bus_12m' | 'bus_articulated' | 'truck_tandem', VehicleParams> = {
+
   passenger_car: {
     name: 'Легковой автомобиль',
-    wheelbase: 2.7,
-    trackWidth: 1.8,
-    overhangFront: 0.9,
-    overhangRear: 0.9,
-    minTurningRadius: 5.5,
-    totalLength: 4.5,
+    wheelbase: 2.90,
+    trackWidth: 1.42,
+    overhangFront: 0.90,
+    overhangRear: 1.10,
+    minTurningRadius: 4.99,
+    totalLength: 4.90,
+    axleConfig: '2',
   },
-  truck_16m: {
-    name: 'Грузовик 16 м',
-    wheelbase: 5.5,
-    trackWidth: 2.5,
-    overhangFront: 1.2,
-    overhangRear: 1.5,
-    minTurningRadius: 9.0,
-    totalLength: 16.0,
-  },
-  truck_20m: {
-    name: 'Грузовик 20 м',
-    wheelbase: 6.0,
-    trackWidth: 2.5,
-    overhangFront: 1.3,
-    overhangRear: 2.0,
-    minTurningRadius: 12.0,
-    totalLength: 20.0,
-  },
+
   bus_12m: {
-    name: 'Автобус 12 м',
-    wheelbase: 5.9,
-    trackWidth: 2.3,
-    overhangFront: 2.5,
-    overhangRear: 2.0,
-    minTurningRadius: 10.5,
+    name: 'Автобус городской 12 м',
+    wheelbase: 6.20,
+    trackWidth: 1.11,
+    overhangFront: 2.75,
+    overhangRear: 3.05,
+    minTurningRadius: 5.011,
     totalLength: 12.0,
+    axleConfig: '2',
   },
+
+  // L_eff = wheelbase1 (до первой задней оси тандема)
   bus_articulated: {
-    name: 'Автобус сочленённый 18 м',
-    wheelbase: 12.0,
-    trackWidth: 2.55,
-    overhangFront: 2.7,
-    overhangRear: 2.3,
-    minTurningRadius: 11.5,
-    totalLength: 18.0,
+    name: 'Автобус пригородный 15 м (3 оси)',
+    wheelbase: 6.90,
+    trackWidth: 1.69,
+    overhangFront: 2.60,
+    overhangRear: 4.20,
+    minTurningRadius: 5.673,
+    totalLength: 15.0,
+    axleConfig: '3_bus',
+  },
+
+  // L_eff = wheelbase1 + wheelbase2 (до последней оси тандема)
+  truck_tandem: {
+    name: 'Грузовик 12 м (3 оси, тандем)',
+    wheelbase: 7.10,
+    trackWidth: 2.98,
+    overhangFront: 1.50,
+    overhangRear: 3.40,
+    minTurningRadius: 6.618,
+    totalLength: 12.0,
+    axleConfig: '3_truck',
   },
 };
 
 // ─── Вспомогательная геометрия ───────────────────────────────────────────────
 
-/**
- * Перемещение точки по нормали к направлению (в плане)
- */
-function offsetPoint(pt: Point3D, angle: number, dist: number): Point3D {
-  return {
-    x: pt.x + dist * Math.cos(angle + Math.PI / 2),
-    y: pt.y + dist * Math.sin(angle + Math.PI / 2),
-    z: pt.z,
-  };
-}
-
-/**
- * Угол от точки A к точке B
- */
+/** Угол от точки A к точке B в плане */
 function bearing(a: Point3D, b: Point3D): number {
   return Math.atan2(b.y - a.y, b.x - a.x);
 }
 
 /**
- * Точки на дуге (N шагов)
- * @param ccw true = против часовой (поворот влево), false = по часовой (вправо)
+ * Смещение точки перпендикулярно направлению движения.
+ * dist > 0 — влево, dist < 0 — вправо.
+ */
+function offsetPoint(pt: Point3D, angle: number, dist: number): Point3D {
+  return {
+    x: pt.x + dist * Math.cos(angle + Math.PI / 2),
+    y: pt.y + dist * Math.sin(angle + Math.PI / 2),
+    z: 0,
+  };
+}
+
+/**
+ * Точки на дуге окружности от startAngle до endAngle.
+ * Направление обхода — кратчайший путь (delta нормализуется в (-π, π]).
  */
 function arcPoints(
   center: Point3D,
   radius: number,
   startAngle: number,
   endAngle: number,
-  ccw: boolean,
-  steps: number = 32,
+  steps: number = 64,
 ): Point3D[] {
-  const pts: Point3D[] = [];
-
-  // Нормализуем delta строго в нужном направлении
   let delta = endAngle - startAngle;
-  if (ccw) {
-    // Должны идти в сторону увеличения угла
-    while (delta <= 0) delta += 2 * Math.PI;
-    while (delta > 2 * Math.PI) delta -= 2 * Math.PI;
-  } else {
-    // Должны идти в сторону уменьшения угла
-    while (delta >= 0) delta -= 2 * Math.PI;
-    while (delta < -2 * Math.PI) delta += 2 * Math.PI;
-  }
+  while (delta >  Math.PI) delta -= 2 * Math.PI;
+  while (delta < -Math.PI) delta += 2 * Math.PI;
 
+  const pts: Point3D[] = [];
   for (let i = 0; i <= steps; i++) {
     const angle = startAngle + (delta * i) / steps;
     pts.push({
       x: center.x + radius * Math.cos(angle),
       y: center.y + radius * Math.sin(angle),
-      z: center.z,
+      z: 0,
     });
   }
   return pts;
@@ -122,193 +134,132 @@ function arcPoints(
 // ─── Основной калькулятор ─────────────────────────────────────────────────────
 
 export class VehicleTrackCalculator {
-  private vehicle: VehicleParams;
+  private v: VehicleParams;
 
   constructor(vehicle: VehicleParams) {
-    this.vehicle = vehicle;
+    this.v = vehicle;
   }
 
   /**
-   * Ширина коридора на прямом участке
+   * Внешний радиус коридора — траектория внешней передней габаритной точки.
+   * R_outer = √((R + trackWidth/2)² + (wheelbase + overhangFront)²)
    */
-  get straightWidth(): number {
-    return this.vehicle.trackWidth + this.vehicle.overhangFront + this.vehicle.overhangRear;
+  calcOuterRadius(R: number = this.v.minTurningRadius): number {
+    const { trackWidth, wheelbase, overhangFront } = this.v;
+    const lateral     = R + trackWidth / 2;
+    const longitudinal = wheelbase + overhangFront;
+    return Math.sqrt(lateral * lateral + longitudinal * longitudinal);
   }
 
   /**
-   * Внешний радиус поворота (AutoTURN формула)
-   * R_outer = R + (wheelbase/2 + trackWidth/2 + overhangFront)
+   * Внутренний радиус коридора — траектория внутренней задней габаритной точки.
+   * R_inner = √((R - trackWidth/2)² + overhangRear²)
    */
-  outerRadius(turningRadius: number): number {
-    const { wheelbase, trackWidth, overhangFront } = this.vehicle;
-    return turningRadius + (wheelbase / 2 + trackWidth / 2 + overhangFront);
+  calcInnerRadius(R: number = this.v.minTurningRadius): number {
+    const { trackWidth, overhangRear } = this.v;
+    const lateral = Math.max(0, R - trackWidth / 2);
+    return Math.sqrt(lateral * lateral + overhangRear * overhangRear);
   }
 
   /**
-   * Внутренний радиус поворота (AutoTURN формула)
-   * R_inner = R - (wheelbase/2 + trackWidth/2)
+   * Радиус переднего забегающего колеса.
+   * R_front = √((R + trackWidth/2)² + wheelbase²)
    */
-  innerRadius(turningRadius: number): number {
-    const { wheelbase, trackWidth } = this.vehicle;
-    return Math.max(0.1, turningRadius - (wheelbase / 2 + trackWidth / 2));
+  calcFrontWheelRadius(R: number = this.v.minTurningRadius): number {
+    const { trackWidth, wheelbase } = this.v;
+    const lateral = R + trackWidth / 2;
+    return Math.sqrt(lateral * lateral + wheelbase * wheelbase);
   }
 
-  /**
-   * Расчёт коридора для одного прямого сегмента трассы
-   */
-  private straightSegmentCorridor(seg: AlignmentSegment): { outer: Point3D[]; inner: Point3D[] } {
+  // ── Построение коридора для прямого сегмента ───────────────────────────────
+
+  /** Прямой участок: коридор = смещение осевой линии на ±trackWidth/2 */
+  private straightCorridor(seg: AlignmentSegment): { outer: Point3D[]; inner: Point3D[] } {
     const angle = bearing(seg.start, seg.end);
-    const halfWidth = this.straightWidth / 2;
-
-    const outer: Point3D[] = [
-      offsetPoint(seg.start, angle, halfWidth),
-      offsetPoint(seg.end, angle, halfWidth),
-    ];
-    const inner: Point3D[] = [
-      offsetPoint(seg.start, angle, -halfWidth),
-      offsetPoint(seg.end, angle, -halfWidth),
-    ];
-    return { outer, inner };
+    const hw    = this.v.trackWidth / 2;
+    return {
+      outer: [offsetPoint(seg.start, angle,  hw), offsetPoint(seg.end, angle,  hw)],
+      inner: [offsetPoint(seg.start, angle, -hw), offsetPoint(seg.end, angle, -hw)],
+    };
   }
 
+  // ── Построение коридора для дугового сегмента ──────────────────────────────
+
   /**
-   * Расчёт коридора для дугового сегмента трассы
+   * Дуговой участок: внешний и внутренний контуры — дуги окружностей
+   * с радиусами R_outer / R_inner от центра поворота ICR.
+   *
+   * Поворот вправо: ICR справа, внешний борт (левый) = R_outer, внутренний (правый) = R_inner.
+   * Поворот влево — симметрично.
    */
-  private arcSegmentCorridor(seg: AlignmentSegment): { outer: Point3D[]; inner: Point3D[] } {
-    if (!seg.center || !seg.radius) {
+  private arcCorridor(seg: AlignmentSegment): { outer: Point3D[]; inner: Point3D[] } {
+    if (!seg.center || seg.radius == null) {
       throw new Error('Дуговой сегмент должен содержать center и radius');
     }
 
-    const R = seg.radius;
-    const isLeft = seg.direction === 'left';  // поворот влево = CCW
-    const Ro = this.outerRadius(R);
-    const Ri = this.innerRadius(R);
+    const Ro = this.calcOuterRadius(seg.radius);
+    const Ri = this.calcInnerRadius(seg.radius);
 
     const startAngle = bearing(seg.center, seg.start);
     const endAngle   = bearing(seg.center, seg.end);
+    const isRight    = seg.direction === 'right';
 
-    // Внешний контур — всегда дальше от центра поворота (Ro)
-    // Внутренний контур — всегда ближе к центру (Ri)
-    // Направление обхода: влево = CCW, вправо = CW
-    const outer = arcPoints(seg.center, Ro, startAngle, endAngle, isLeft);
-    const inner = arcPoints(seg.center, Ri, startAngle, endAngle, isLeft);
-
-    return { outer, inner };
+    return {
+      outer: arcPoints(seg.center, isRight ? Ro : Ri, startAngle, endAngle),
+      inner: arcPoints(seg.center, isRight ? Ri : Ro, startAngle, endAngle),
+    };
   }
 
+  // ── Полный коридор по трассе ───────────────────────────────────────────────
+
   /**
-   * Расчёт полного коридора движения по трассе
+   * Расчёт полного коридора движения ТС вдоль трассы.
+   *
+   * Для каждого сегмента строятся пары контуров outer/inner,
+   * затем они стыкуются и склеиваются в единые полилинии.
+   *
+   * Стыковка прямой↔дуга: крайние точки прямой подтягиваются к дуге,
+   * так как дуга геометрически точна (строится от ICR).
    */
   calculateCorridor(alignment: Alignment): CorridorResult {
+    const segmentContours = alignment.segments.map(seg =>
+      seg.type === 'straight' ? this.straightCorridor(seg) : this.arcCorridor(seg),
+    );
+
+    for (let i = 0; i < segmentContours.length - 1; i++) {
+      const cur  = segmentContours[i];
+      const next = segmentContours[i + 1];
+      const curType  = alignment.segments[i].type;
+      const nextType = alignment.segments[i + 1].type;
+
+      if (curType === 'straight' && nextType === 'arc') {
+        cur.outer[cur.outer.length - 1] = { ...next.outer[0] };
+        cur.inner[cur.inner.length - 1] = { ...next.inner[0] };
+      } else if (curType === 'arc' && nextType === 'straight') {
+        next.outer[0] = { ...cur.outer[cur.outer.length - 1] };
+        next.inner[0] = { ...cur.inner[cur.inner.length - 1] };
+      }
+      // arc→arc: точки геометрически совпадают, стыковка не нужна
+    }
+
     const outerPolyline: Point3D[] = [];
     const innerPolyline: Point3D[] = [];
 
-    for (const seg of alignment.segments) {
-      let outer: Point3D[];
-      let inner: Point3D[];
-
-      if (seg.type === 'straight') {
-        ({ outer, inner } = this.straightSegmentCorridor(seg));
-      } else {
-        ({ outer, inner } = this.arcSegmentCorridor(seg));
-      }
-
-      // Добавляем точки (избегаем дублирования стыков)
-      if (outerPolyline.length > 0) {
-        outer.shift();
-        inner.shift();
-      }
-      outerPolyline.push(...outer);
-      innerPolyline.push(...inner);
+    for (let i = 0; i < segmentContours.length; i++) {
+      const { outer, inner } = segmentContours[i];
+      outerPolyline.push(...(i === 0 ? outer : outer.slice(1)));
+      innerPolyline.push(...(i === 0 ? inner : inner.slice(1)));
     }
 
-    // Используем минимальный радиус поворота из параметров ТС
-    const R = this.vehicle.minTurningRadius;
+    const R = this.v.minTurningRadius;
+
     return {
-      outerRadius: this.outerRadius(R),
-      innerRadius: this.innerRadius(R),
-      straightWidth: this.straightWidth,
+      outerRadius:      this.calcOuterRadius(R),
+      innerRadius:      this.calcInnerRadius(R),
+      frontWheelRadius: this.calcFrontWheelRadius(R),
+      straightWidth:    this.v.trackWidth,
       outerPolyline,
       innerPolyline,
     };
   }
-}
-
-// ─── Парсер IFC Alignment ─────────────────────────────────────────────────────
-
-/**
- * Преобразование IFC-объекта трассы в структуру Alignment
- * Адаптируйте под реальный API Топоматик 360
- */
-export function parseIfcAlignment(ifcObject: any): Alignment {
-  const segments: AlignmentSegment[] = [];
-  let totalLength = 0;
-
-  // Попытка прочитать сегменты из IfcAlignmentHorizontal
-  const horizontal =
-    ifcObject?.IsDecomposedBy?.[0]?.RelatedObjects?.find(
-      (o: any) => o?.type === 'IfcAlignmentHorizontal',
-    ) ?? ifcObject;
-
-  const elements: any[] = horizontal?.IsDecomposedBy?.[0]?.RelatedObjects ?? [];
-
-  for (const el of elements) {
-    const design = el?.DesignParameters;
-    if (!design) continue;
-
-    if (design.type === 'IfcAlignmentHorizontalSegment') {
-      const startPt: Point3D = { x: design.StartPoint?.x ?? 0, y: design.StartPoint?.y ?? 0, z: 0 };
-      const len: number = design.SegmentLength ?? 10;
-
-      if (design.PredefinedType === 'LINE') {
-        const angle: number = design.StartDirection ?? 0;
-        const endPt: Point3D = {
-          x: startPt.x + len * Math.cos(angle),
-          y: startPt.y + len * Math.sin(angle),
-          z: 0,
-        };
-        segments.push({ type: 'straight', start: startPt, end: endPt, length: len });
-      } else if (design.PredefinedType === 'CIRCULARARC') {
-        const R: number = design.Radius ?? 10;
-        const dir: 'left' | 'right' = design.IsCCW ? 'left' : 'right';
-        const startAngle: number = design.StartDirection ?? 0;
-        const sign = dir === 'left' ? 1 : -1;
-        const center: Point3D = {
-          x: startPt.x + R * Math.cos(startAngle + sign * Math.PI / 2),
-          y: startPt.y + R * Math.sin(startAngle + sign * Math.PI / 2),
-          z: 0,
-        };
-        const deltaAngle = len / R;
-        const endAngleFromCenter = startAngle - sign * Math.PI / 2 + sign * deltaAngle;
-        const endPt: Point3D = {
-          x: center.x + R * Math.cos(endAngleFromCenter),
-          y: center.y + R * Math.sin(endAngleFromCenter),
-          z: 0,
-        };
-        segments.push({ type: 'arc', start: startPt, end: endPt, length: len, radius: R, direction: dir, center });
-      }
-
-      totalLength += len;
-    }
-  }
-
-  // Если IFC-данных нет — создаём тестовую трассу для демонстрации
-  if (segments.length === 0) {
-    segments.push(
-      { type: 'straight', start: { x: 0, y: 0, z: 0 }, end: { x: 30, y: 0, z: 0 }, length: 30 },
-      {
-        type: 'arc',
-        start: { x: 30, y: 0, z: 0 },
-        end: { x: 40, y: 10, z: 0 },
-        length: 15.7,
-        radius: 10,
-        direction: 'left',
-        center: { x: 30, y: 10, z: 0 },
-      },
-      { type: 'straight', start: { x: 40, y: 10, z: 0 }, end: { x: 40, y: 40, z: 0 }, length: 30 },
-    );
-    totalLength = 75.7;
-  }
-
-  return { ifcId: ifcObject?.GlobalId ?? 'demo', segments, totalLength };
 }

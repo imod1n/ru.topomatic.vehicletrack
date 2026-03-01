@@ -3,7 +3,7 @@
     "name": "ru.topomatic.vehicletrack",
     "displayName": "Коридор движения ТС",
     "description": "Расчёт траекторий движения транспортных средств и коридоров движения (аналог AutoTURN)",
-    "version": "1.0.11",
+    "version": "1.0.001",
     "main": "src/index.ts",
     "scripts": {
         "serve": "albatros-cli serve",
@@ -31,7 +31,7 @@
                 "app": "wdx",
                 "title": "Коридор движения ТС",
                 "cmd": "vehicletrack",
-                "description": "Расчёт траектории и коридора движения транспортного средства по трассе"
+                "description": "Правило для оценки траектории и построения коридора движения транспортного средства по трассе"
             }
         },
         "properties": {
@@ -40,42 +40,12 @@
                     "cmd": "ru.albatros.wdx/property:filter",
                     "label": "Фильтр трассы",
                     "field": "filter",
-                    "description": "Фильтр для выбора объектов трассы"
+                    "description": "Фильтр для выбора объекта, который будет являться исходным осевым элементов для расчета коридора движения"
                 },
                 {
                     "cmd": "property:vehiclePreset",
-                    "label": "Тип ТС",
-                    "description": "Выберите тип транспортного средства из списка"
-                },
-                {
-                    "cmd": "property:numericParam",
-                    "label": "Колёсная база (м)",
-                    "field": "customWheelbase",
-                    "description": "Расстояние между осями"
-                },
-                {
-                    "cmd": "property:numericParam",
-                    "label": "Ширина колеи (м)",
-                    "field": "customTrackWidth",
-                    "description": "Расстояние между внешними краями колёс"
-                },
-                {
-                    "cmd": "property:numericParam",
-                    "label": "Передний свес (м)",
-                    "field": "customOverhangFront",
-                    "description": "Расстояние от передней оси до переднего бампера"
-                },
-                {
-                    "cmd": "property:numericParam",
-                    "label": "Задний свес (м)",
-                    "field": "customOverhangRear",
-                    "description": "Расстояние от задней оси до заднего бампера"
-                },
-                {
-                    "cmd": "property:numericParam",
-                    "label": "Мин. радиус поворота (м)",
-                    "field": "customTurningRadius",
-                    "description": "Минимальный радиус поворота по оси ТС"
+                    "label": "Тип расчетного автомобиля",
+                    "description": "Выберите тип транспортного средства для расчета коридора движения из библиотеки"
                 }
             ]
         }
